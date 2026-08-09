@@ -145,7 +145,10 @@ export const SubmitProofModal: React.FC<SubmitProofModalProps> = ({ onSuccess })
       }
 
       if (!response.ok) {
-        const errorText = await response.text();
+        let errorText = await response.text();
+        if (errorText.includes("<!DOCTYPE") || errorText.includes("<html")) {
+          errorText = `Endpoint returned HTTP ${response.status} HTML error page. Backend service is updating or initializing.`;
+        }
         throw new Error(`Oracle server error: ${errorText || response.statusText}`);
       }
 

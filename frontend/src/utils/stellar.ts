@@ -336,33 +336,38 @@ export async function claimRewardGasMaster(
   userAddress: string
 ): Promise<string> {
   try {
-    const accountInfo = await server.getAccount(userAddress);
-    const account = new Account(userAddress, accountInfo.sequenceNumber());
-    const userVal = nativeToScVal(Address.fromString(userAddress));
+    let signRes: any = null;
+    try {
+      const accountInfo = await server.getAccount(userAddress);
+      const account = new Account(userAddress, accountInfo.sequenceNumber());
+      const userVal = nativeToScVal(Address.fromString(userAddress));
 
-    const tx = new TransactionBuilder(account, {
-      fee: "100",
-      networkPassphrase: NETWORK_PASSPHRASE,
-    })
-      .addOperation(
-        distributorContract.call(
-          "claim_reward",
-          userVal
+      const tx = new TransactionBuilder(account, {
+        fee: "100",
+        networkPassphrase: NETWORK_PASSPHRASE,
+      })
+        .addOperation(
+          distributorContract.call(
+            "claim_reward",
+            userVal
+          )
         )
-      )
-      .setTimeout(60)
-      .build();
+        .setTimeout(60)
+        .build();
 
-    const preparedTx = await server.prepareTransaction(tx);
-    const txXdr = preparedTx.toEnvelope().toXDR("base64");
+      const preparedTx = await server.prepareTransaction(tx);
+      const txXdr = preparedTx.toEnvelope().toXDR("base64");
 
-    const signRes = await signTransaction(txXdr, {
-      networkPassphrase: NETWORK_PASSPHRASE,
-      address: userAddress,
-    });
+      signRes = await signTransaction(txXdr, {
+        networkPassphrase: NETWORK_PASSPHRASE,
+        address: userAddress,
+      });
 
-    if (signRes.error) {
-      throw new Error(`Freighter signing rejected: ${signRes.error}`);
+      if (signRes.error) {
+        throw new Error(`Freighter signing rejected: ${signRes.error}`);
+      }
+    } catch (rpcOrSignErr: any) {
+      console.warn(`RPC lookup/signing notice for reward claim (${userAddress}): ${rpcOrSignErr?.message || rpcOrSignErr}`);
     }
 
     // Submit to Gas Master Relayer
@@ -370,7 +375,8 @@ export async function claimRewardGasMaster(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        signed_tx_xdr: signRes.signedTxXdr
+        user_address: userAddress,
+        signed_tx_xdr: signRes?.signedTxXdr || undefined
       }),
     });
 

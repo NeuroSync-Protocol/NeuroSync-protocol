@@ -43,8 +43,11 @@ else:
             relayer_keypair = Keypair.from_secret(relayer_secret)
         else:
             relayer_keypair = Keypair.random()
-            with open(relayer_secret_path, "w") as f:
-                f.write(relayer_keypair.secret)
+            try:
+                with open(relayer_secret_path, "w") as f:
+                    f.write(relayer_keypair.secret)
+            except Exception:
+                pass
 
 
 def ensure_relayer_funded(relayer_pubkey: str = None) -> bool:

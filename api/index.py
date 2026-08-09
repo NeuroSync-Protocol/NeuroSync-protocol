@@ -45,15 +45,18 @@ else:
         oracle_keypair = Keypair.from_secret(oracle_secret)
     else:
         oracle_keypair = Keypair.random()
-        with open(secret_path, "w") as f:
-            f.write(oracle_keypair.secret)
+        try:
+            with open(secret_path, "w") as f:
+                f.write(oracle_keypair.secret)
+        except Exception:
+            pass
 
 # Load the pre-trained machine learning pipeline
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "sleep_quality_model.pkl")
 try:
     model = joblib.load(MODEL_PATH)
 
-    PARTICIPANTS_FILE = os.path.join(os.path.dirname(__file__), ".participants.json")
+    PARTICIPANTS_FILE = "/tmp/.participants.json" if os.name != "nt" else os.path.join(os.path.dirname(__file__), ".participants.json")
 
     def record_participant(address: str):
         if not address:
