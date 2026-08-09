@@ -38,7 +38,7 @@ export default function LeaderboardPage() {
         const getBackendUrl = (): string => {
           try {
             const envUrl = process.env.NEXT_PUBLIC_GAS_MASTER_URL || process.env.NEXT_PUBLIC_ORACLE_API_URL || process.env.NEXT_PUBLIC_ORACLE_URL || "";
-            if (envUrl && !envUrl.includes("vercel.app") && !envUrl.includes("localhost")) {
+            if (envUrl && !envUrl.includes("vercel.app")) {
               const parsed = new URL(envUrl);
               return parsed.origin;
             }
