@@ -18,12 +18,14 @@ const RPC_URL = process.env.NEXT_PUBLIC_SOROBAN_RPC_URL || "https://soroban-test
 const CONTRACT_ID = process.env.NEXT_PUBLIC_CONTRACT_ID || "CDJ47A6P6PWCG7ZQYO3BNEQ6FLFOTSRRENEH2V5TVXDBEET7YBL4JNWG";
 const DISTRIBUTOR_CONTRACT_ID = process.env.NEXT_PUBLIC_DISTRIBUTOR_CONTRACT_ID || process.env.NEXT_PUBLIC_REWARD_DISTRIBUTOR_CONTRACT_ID || "CC42VJLNLOCRSJHX3VXSVR3KOZG2YGFNT6TUEF2DV6TXYS6FGYMESQ3V";
 const getBackendUrl = (): string => {
-  const envUrl = process.env.NEXT_PUBLIC_GAS_MASTER_URL || process.env.NEXT_PUBLIC_ORACLE_API_URL || process.env.NEXT_PUBLIC_ORACLE_URL || "";
-  const cleaned = envUrl.trim().replace(/\/+$/, "");
-  if (!cleaned || cleaned.includes("vercel.app") || cleaned.includes("localhost")) {
-    return "https://neurosync-protocol.onrender.com";
-  }
-  return cleaned;
+  try {
+    const envUrl = process.env.NEXT_PUBLIC_GAS_MASTER_URL || process.env.NEXT_PUBLIC_ORACLE_API_URL || process.env.NEXT_PUBLIC_ORACLE_URL || "";
+    if (envUrl && !envUrl.includes("vercel.app") && !envUrl.includes("localhost")) {
+      const parsed = new URL(envUrl);
+      return parsed.origin;
+    }
+  } catch (e) {}
+  return "https://neurosync-protocol.onrender.com";
 };
 
 const BASE_RELAYER_URL = getBackendUrl();

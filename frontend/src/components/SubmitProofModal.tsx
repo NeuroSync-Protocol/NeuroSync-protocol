@@ -116,12 +116,14 @@ export const SubmitProofModal: React.FC<SubmitProofModalProps> = ({ onSuccess })
     try {
       // 1. Fetch ML Prediction and Signature from Backend/Oracle
       const getBackendUrl = (): string => {
-        const envUrl = process.env.NEXT_PUBLIC_GAS_MASTER_URL || process.env.NEXT_PUBLIC_ORACLE_URL || process.env.NEXT_PUBLIC_ORACLE_API_URL || "";
-        const cleaned = envUrl.trim().replace(/\/+$/, "");
-        if (!cleaned || cleaned.includes("vercel.app") || cleaned.includes("localhost")) {
-          return "https://neurosync-protocol.onrender.com";
-        }
-        return cleaned;
+        try {
+          const envUrl = process.env.NEXT_PUBLIC_GAS_MASTER_URL || process.env.NEXT_PUBLIC_ORACLE_URL || process.env.NEXT_PUBLIC_ORACLE_API_URL || "";
+          if (envUrl && !envUrl.includes("vercel.app") && !envUrl.includes("localhost")) {
+            const parsed = new URL(envUrl);
+            return parsed.origin;
+          }
+        } catch (e) {}
+        return "https://neurosync-protocol.onrender.com";
       };
       const oracleUrl = getBackendUrl();
       const endpoint = `${oracleUrl}/api/generate_signature`;
