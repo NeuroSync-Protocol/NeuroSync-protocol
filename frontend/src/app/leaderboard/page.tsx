@@ -35,7 +35,15 @@ export default function LeaderboardPage() {
       setLoading(true);
       try {
         // 1. Fetch participants from backend relayer API
-        const relayerUrl = (process.env.NEXT_PUBLIC_GAS_MASTER_URL || process.env.NEXT_PUBLIC_ORACLE_API_URL || "https://neurosync-protocol.onrender.com").replace(/\/+$/, "");
+        const getBackendUrl = (): string => {
+          const envUrl = process.env.NEXT_PUBLIC_GAS_MASTER_URL || process.env.NEXT_PUBLIC_ORACLE_API_URL || process.env.NEXT_PUBLIC_ORACLE_URL || "";
+          const cleaned = envUrl.trim().replace(/\/+$/, "");
+          if (!cleaned || cleaned.includes("vercel.app") || cleaned.includes("localhost")) {
+            return "https://neurosync-protocol.onrender.com";
+          }
+          return cleaned;
+        };
+        const relayerUrl = getBackendUrl();
         let apiParticipants: string[] = [];
         try {
           const apiRes = await fetch(`${relayerUrl}/api/v1/participants`);

@@ -17,7 +17,16 @@ const { signTransaction } = freighterApi;
 const RPC_URL = process.env.NEXT_PUBLIC_SOROBAN_RPC_URL || "https://soroban-testnet.stellar.org:443";
 const CONTRACT_ID = process.env.NEXT_PUBLIC_CONTRACT_ID || "CDJ47A6P6PWCG7ZQYO3BNEQ6FLFOTSRRENEH2V5TVXDBEET7YBL4JNWG";
 const DISTRIBUTOR_CONTRACT_ID = process.env.NEXT_PUBLIC_DISTRIBUTOR_CONTRACT_ID || process.env.NEXT_PUBLIC_REWARD_DISTRIBUTOR_CONTRACT_ID || "CC42VJLNLOCRSJHX3VXSVR3KOZG2YGFNT6TUEF2DV6TXYS6FGYMESQ3V";
-const BASE_RELAYER_URL = (process.env.NEXT_PUBLIC_GAS_MASTER_URL || process.env.NEXT_PUBLIC_ORACLE_API_URL || "https://neurosync-protocol.onrender.com").replace(/\/+$/, "");
+const getBackendUrl = (): string => {
+  const envUrl = process.env.NEXT_PUBLIC_GAS_MASTER_URL || process.env.NEXT_PUBLIC_ORACLE_API_URL || process.env.NEXT_PUBLIC_ORACLE_URL || "";
+  const cleaned = envUrl.trim().replace(/\/+$/, "");
+  if (!cleaned || cleaned.includes("vercel.app") || cleaned.includes("localhost")) {
+    return "https://neurosync-protocol.onrender.com";
+  }
+  return cleaned;
+};
+
+const BASE_RELAYER_URL = getBackendUrl();
 const GAS_MASTER_URL = `${BASE_RELAYER_URL}/api/v1/submit-proof`;
 
 const NETWORK_PASSPHRASE = "Test SDF Network ; September 2015";
