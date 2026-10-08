@@ -32,9 +32,11 @@ pub trait RewardDistributorInterface {
 
 #[contracttype]
 pub enum DataKey {
+    Admin,
     OracleKey,
     DistributorAddress,
     UserStreak(Address),
+    Paused,
 }
 
 #[contracttype]
@@ -49,13 +51,52 @@ pub struct NeuroSyncContract;
 
 #[contractimpl]
 impl NeuroSyncContract {
-    /// Initializes the contract with the Oracle's public key.
-    pub fn init(env: Env, oracle_pub_key: BytesN<32>) {
+    /// Initializes the contract with the Oracle's public key and admin address.
+    pub fn init(env: Env, admin: Address, oracle_pub_key: BytesN<32>) {
         let key = DataKey::OracleKey;
         if env.storage().instance().has(&key) {
             panic!("Contract already initialized");
         }
+        env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&key, &oracle_pub_key);
+        env.storage().instance().set(&DataKey::Paused, &false);
+        env.storage().instance().extend_ttl(172_800, 518_400);
+    }
+
+    /// Retrieve the admin address
+    pub fn admin(env: Env) -> Address {
+        env.storage().instance().extend_ttl(172_800, 518_400);
+        env.storage().instance().get(&DataKey::Admin).unwrap_or_else(|| panic!("Admin not set"))
+    }
+
+    /// Check if the contract is paused
+    pub fn is_paused(env: Env) -> bool {
+        env.storage().instance().extend_ttl(172_800, 518_400);
+        env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+    }
+
+    /// Emergency pause circuit breaker - requires admin authentication
+    pub fn pause(env: Env, admin: Address) {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .unwrap_or_else(|| panic!("Admin not set"));
+        if admin != stored_admin {
+            panic!("Unauthorized: only admin can pause");
+        }
+        admin.require_auth();
+
+        env.storage().instance().set(&DataKey::Paused, &true);
+        env.storage().instance().extend_ttl(172_800, 518_400);
+
+        env.events().publish(
+            (symbol_short!("circuit"), symbol_short!("pause")),
+            CircuitBreakerEvent {
+                admin,
+                is_paused: true,
+            },
+        );
     }
 
     /// Set or update the deployed Reward Distributor contract address
