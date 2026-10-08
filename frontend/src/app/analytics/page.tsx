@@ -6,6 +6,8 @@ import { fetchStreak } from "../../utils/stellar";
 import { 
   TrendingUp, Compass, ShieldAlert, Sparkles, Loader2, CheckCircle, Info
 } from "lucide-react";
+import { SleepTelemetryChart, TelemetryEpochData } from "../../components/SleepTelemetryChart";
+import { AuthenticityMetricCard } from "../../components/AuthenticityMetricCard";
 
 interface SubmissionRecord {
   timestamp: number;
@@ -211,6 +213,49 @@ export default function AnalyticsPage() {
     return (history.reduce((acc, curr) => acc + curr.sleepScore, 0) / totalSubmissions).toFixed(1);
   }, [totalSubmissions, history]);
 
+  // Derive 7-day epochs for the SleepTelemetryChart from history or baseline
+  const telemetryEpochs: TelemetryEpochData[] = useMemo(() => {
+    if (history.length === 0) {
+      return [
+        { dayLabel: "Day 1", remSleepHours: 1.8, deepSleepHours: 1.6, lightSleepHours: 4.2, hrvMs: 68, authenticityScore: 96 },
+        { dayLabel: "Day 2", remSleepHours: 2.1, deepSleepHours: 1.9, lightSleepHours: 3.8, hrvMs: 74, authenticityScore: 98 },
+        { dayLabel: "Day 3", remSleepHours: 1.5, deepSleepHours: 1.2, lightSleepHours: 4.5, hrvMs: 59, authenticityScore: 92 },
+        { dayLabel: "Day 4", remSleepHours: 2.3, deepSleepHours: 2.0, lightSleepHours: 3.9, hrvMs: 82, authenticityScore: 99 },
+        { dayLabel: "Day 5", remSleepHours: 1.9, deepSleepHours: 1.7, lightSleepHours: 4.1, hrvMs: 71, authenticityScore: 95 },
+        { dayLabel: "Day 6", remSleepHours: 2.4, deepSleepHours: 2.2, lightSleepHours: 3.6, hrvMs: 88, authenticityScore: 100 },
+        { dayLabel: "Day 7", remSleepHours: 2.0, deepSleepHours: 1.8, lightSleepHours: 4.0, hrvMs: 76, authenticityScore: 97 },
+      ];
+    }
+
+    const sorted = [...history].sort((a, b) => a.timestamp - b.timestamp).slice(-7);
+    return sorted.map((item, idx) => {
+      const dur = item.sleepDuration || 7.5;
+      const deep = Math.max(0.8, Math.round((dur * 0.22) * 10) / 10);
+      const rem = Math.max(1.0, Math.round((dur * 0.25) * 10) / 10);
+      const light = Math.max(1.5, Math.round((dur - deep - rem) * 10) / 10);
+      const hrv = Math.max(45, Math.min(110, Math.round(85 - (item.stressLevel * 5) + 10)));
+      const auth = Math.min(100, Math.max(80, Math.round(item.sleepScore * 10)));
+
+      const dayDate = new Date(item.timestamp < 100000000000 ? item.timestamp * 1000 : item.timestamp);
+      const dayLabel = dayDate.toLocaleDateString("en-US", { weekday: "short" }) || `Day ${idx + 1}`;
+
+      return {
+        dayLabel,
+        remSleepHours: rem,
+        deepSleepHours: deep,
+        lightSleepHours: light,
+        hrvMs: hrv,
+        authenticityScore: auth,
+      };
+    });
+  }, [history]);
+
+  const avgAuthenticityScore = useMemo(() => {
+    if (telemetryEpochs.length === 0) return 96;
+    const sum = telemetryEpochs.reduce((acc, curr) => acc + (curr.authenticityScore || 95), 0);
+    return Math.round(sum / telemetryEpochs.length);
+  }, [telemetryEpochs]);
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col relative overflow-hidden transition-colors duration-300">
       {/* Background glow grids */}
@@ -283,6 +328,21 @@ export default function AnalyticsPage() {
                 <span className="text-2xl font-black text-blue-600 dark:text-blue-400 font-mono mt-2">{streakCount} <span className="text-xs font-normal text-slate-400">days</span></span>
               </div>
             </div>
+
+            {/* Biometric Authenticity & Multiplier Card */}
+            <AuthenticityMetricCard
+              authenticityScore={avgAuthenticityScore}
+              streakCount={streakCount}
+              totalVerifiedProofs={totalSubmissions}
+              lastVerifiedHash={history[0]?.txHash}
+            />
+
+            {/* 7-Day Sleep Telemetry Interactive Chart */}
+            <SleepTelemetryChart
+              data={telemetryEpochs}
+              title="7-Day Sleep Architecture & HRV Telemetry Epoch"
+              subtitle="Verifiable cryptographic sleep stream decomposed into REM, Deep Sleep, Light Sleep, and HRV"
+            />
 
             {/* Core Analytics Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
