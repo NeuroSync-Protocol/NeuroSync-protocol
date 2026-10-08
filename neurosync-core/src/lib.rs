@@ -123,6 +123,19 @@ impl NeuroSyncContract {
         );
     }
 
+    /// Extend instance storage TTL helper
+    pub fn extend_instance_ttl(env: Env, threshold: u32, extend_to: u32) {
+        env.storage().instance().extend_ttl(threshold, extend_to);
+    }
+
+    /// Extend persistent user streak data TTL helper
+    pub fn extend_user_ttl(env: Env, user: Address, threshold: u32, extend_to: u32) {
+        let streak_key = DataKey::UserStreak(user);
+        if env.storage().persistent().has(&streak_key) {
+            env.storage().persistent().extend_ttl(&streak_key, threshold, extend_to);
+        }
+    }
+
     /// Set or update the deployed Reward Distributor contract address
     pub fn set_distributor(env: Env, distributor: Address) {
         env.storage().instance().set(&DataKey::DistributorAddress, &distributor);
