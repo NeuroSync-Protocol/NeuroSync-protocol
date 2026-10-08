@@ -63,6 +63,37 @@ impl NeuroSyncContract {
         env.storage().instance().set(&DataKey::DistributorAddress, &distributor);
     }
 
+    /// Verifies biometric telemetry proof against Oracle key and publishes event
+    pub fn verify_telemetry(
+        env: Env,
+        user: Address,
+        payload: Bytes,
+        signature: BytesN<64>,
+    ) -> bool {
+        user.require_auth();
+
+        env.storage().instance().extend_ttl(172_800, 518_400);
+        let key = DataKey::OracleKey;
+        let oracle_pub_key: BytesN<32> = env
+            .storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| panic!("Contract not initialized"));
+
+        env.crypto().ed25519_verify(&oracle_pub_key, &payload, &signature);
+
+        let timestamp = env.ledger().timestamp();
+        env.events().publish(
+            (symbol_short!("biom"), symbol_short!("verify"), user.clone()),
+            BiometricVerifiedEvent {
+                user,
+                timestamp,
+            },
+        );
+
+        true
+    }
+
     /// Submits a signed sleep data shard.
     /// Verifies the Oracle signature and updates the habit streak logic.
     pub fn submit_shard(
@@ -85,6 +116,17 @@ impl NeuroSyncContract {
 
         // 3. Cryptographically verify signature matches the payload and Oracle public key
         env.crypto().ed25519_verify(&oracle_pub_key, &payload, &signature);
+
+        let current_timestamp = env.ledger().timestamp();
+
+        // Emit biometric verification event
+        env.events().publish(
+            (symbol_short!("biom"), symbol_short!("verify"), user.clone()),
+            BiometricVerifiedEvent {
+                user: user.clone(),
+                timestamp: current_timestamp,
+            },
+        );
 
         // 4. Retrieve or initialize the user's streak data from persistent storage using on-chain ledger timestamp
         let current_timestamp = env.ledger().timestamp();
