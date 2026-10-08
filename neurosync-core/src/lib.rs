@@ -36,6 +36,7 @@ pub enum DataKey {
     OracleKey,
     DistributorAddress,
     UserStreak(Address),
+    LastSubmission(Address),
     Paused,
 }
 
@@ -204,6 +205,16 @@ impl NeuroSyncContract {
 
         let current_timestamp = env.ledger().timestamp();
 
+        // Rate-limiting check: enforce minimum cooldown between submissions per wallet
+        let last_sub_key = DataKey::LastSubmission(user.clone());
+        if let Some(last_ts) = env.storage().persistent().get::<DataKey, u64>(&last_sub_key) {
+            if current_timestamp < last_ts + 60 {
+                panic!("Rate limited: submission threshold not reached");
+            }
+        }
+        env.storage().persistent().set(&last_sub_key, &current_timestamp);
+        env.storage().persistent().extend_ttl(&last_sub_key, 172_800, 518_400);
+
         // Emit biometric verification event
         env.events().publish(
             (symbol_short!("biom"), symbol_short!("verify"), user.clone()),
@@ -214,7 +225,6 @@ impl NeuroSyncContract {
         );
 
         // 4. Retrieve or initialize the user's streak data from persistent storage using on-chain ledger timestamp
-        let current_timestamp = env.ledger().timestamp();
         let streak_key = DataKey::UserStreak(user.clone());
         if env.storage().persistent().has(&streak_key) {
             env.storage().persistent().extend_ttl(&streak_key, 172_800, 518_400);
