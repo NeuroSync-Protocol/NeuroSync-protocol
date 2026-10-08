@@ -111,6 +111,9 @@ impl NeuroSyncContract {
         payload: Bytes,
         signature: BytesN<64>,
     ) -> bool {
+        if Self::is_paused(env.clone()) {
+            panic!("Contract is paused");
+        }
         user.require_auth();
 
         env.storage().instance().extend_ttl(172_800, 518_400);
@@ -143,6 +146,10 @@ impl NeuroSyncContract {
         payload: Bytes,
         signature: BytesN<64>,
     ) {
+        if Self::is_paused(env.clone()) {
+            panic!("Contract is paused");
+        }
+
         // 1. Require authorization from the user
         user.require_auth();
 
