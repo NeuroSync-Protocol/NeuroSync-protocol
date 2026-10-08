@@ -99,6 +99,30 @@ impl NeuroSyncContract {
         );
     }
 
+    /// Resume operations after emergency pause - requires admin authentication
+    pub fn unpause(env: Env, admin: Address) {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .unwrap_or_else(|| panic!("Admin not set"));
+        if admin != stored_admin {
+            panic!("Unauthorized: only admin can unpause");
+        }
+        admin.require_auth();
+
+        env.storage().instance().set(&DataKey::Paused, &false);
+        env.storage().instance().extend_ttl(172_800, 518_400);
+
+        env.events().publish(
+            (symbol_short!("circuit"), symbol_short!("unpause")),
+            CircuitBreakerEvent {
+                admin,
+                is_paused: false,
+            },
+        );
+    }
+
     /// Set or update the deployed Reward Distributor contract address
     pub fn set_distributor(env: Env, distributor: Address) {
         env.storage().instance().set(&DataKey::DistributorAddress, &distributor);
