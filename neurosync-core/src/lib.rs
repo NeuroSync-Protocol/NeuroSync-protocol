@@ -281,4 +281,16 @@ impl NeuroSyncContract {
         let key = DataKey::UserStreak(user);
         env.storage().persistent().get(&key)
     }
+
+    /// Getter helper for user claim history and streak count
+    pub fn get_user_status(env: Env, user: Address) -> (u32, u64, u64) {
+        let streak_key = DataKey::UserStreak(user.clone());
+        let streak = env.storage().persistent().get::<DataKey, StreakData>(&streak_key)
+            .unwrap_or(StreakData { count: 0, last_timestamp: 0 });
+
+        let last_sub_key = DataKey::LastSubmission(user);
+        let last_sub = env.storage().persistent().get::<DataKey, u64>(&last_sub_key).unwrap_or(0);
+
+        (streak.count, streak.last_timestamp, last_sub)
+    }
 }
