@@ -294,3 +294,6 @@ impl NeuroSyncContract {
         (streak.count, streak.last_timestamp, last_sub)
     }
 }
+
+#[cfg(test)]
+mod test;
