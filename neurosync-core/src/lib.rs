@@ -1,5 +1,29 @@
 #![no_std]
-use soroban_sdk::{contract, contractclient, contractimpl, contracttype, Address, Bytes, BytesN, Env};
+use soroban_sdk::{contract, contractclient, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env};
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BiometricVerifiedEvent {
+    pub user: Address,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EpochRewardClaimedEvent {
+    pub user: Address,
+    pub day_epoch: u64,
+    pub amount: i128,
+    pub streak: u32,
+    pub multiplier_bps: u32,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CircuitBreakerEvent {
+    pub admin: Address,
+    pub is_paused: bool,
+}
 
 #[contractclient(name = "RewardDistributorClient")]
 pub trait RewardDistributorInterface {
