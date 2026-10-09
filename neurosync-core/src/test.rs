@@ -78,3 +78,26 @@ fn test_unauthorized_pause_fails() {
 
     client.pause(&unauthorized_caller);
 }
+
+#[test]
+#[should_panic(expected = "Contract is paused")]
+fn test_transaction_reverts_when_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(NeuroSyncContract, ());
+    let client = NeuroSyncContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let oracle_key = BytesN::from_array(&env, &[1u8; 32]);
+
+    client.init(&admin, &oracle_key);
+    client.pause(&admin);
+    assert_eq!(client.is_paused(), true);
+
+    let payload = Bytes::from_slice(&env, b"telemetry-data");
+    let signature = BytesN::from_array(&env, &[0u8; 64]);
+
+    client.verify_telemetry(&user, &payload, &signature);
+}
