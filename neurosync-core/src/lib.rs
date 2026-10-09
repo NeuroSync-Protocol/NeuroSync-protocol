@@ -138,9 +138,74 @@ impl NeuroSyncContract {
         }
     }
 
-    /// Set or update the deployed Reward Distributor contract address
-    pub fn set_distributor(env: Env, distributor: Address) {
+    /// Resume operations after emergency pause - requires admin authentication
+    pub fn unpause(env: Env, admin: Address) {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .unwrap_or_else(|| panic!("Admin not set"));
+        if admin != stored_admin {
+            panic!("Unauthorized: only admin can unpause");
+        }
+        admin.require_auth();
+
+        env.storage().instance().set(&DataKey::Paused, &false);
+        env.storage().instance().extend_ttl(172_800, 518_400);
+
+        env.events().publish((symbol_short!("circuit"), symbol_short!("unpause")), admin);
+    }
+
+    /// Set or update the deployed Reward Distributor contract address - requires admin authentication
+    pub fn set_distributor(env: Env, admin: Address, distributor: Address) {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .unwrap_or_else(|| panic!("Admin not set"));
+        if admin != stored_admin {
+            panic!("Unauthorized: only admin can set distributor");
+        }
+        admin.require_auth();
+
         env.storage().instance().set(&DataKey::DistributorAddress, &distributor);
+        env.storage().instance().extend_ttl(172_800, 518_400);
+    }
+
+    /// Verifies telemetry proof against the Oracle public key and emits an event.
+    /// Can be called standalone or as part of shard ingestion.
+    pub fn verify_telemetry(
+        env: Env,
+        user: Address,
+        payload: Bytes,
+        signature: BytesN<64>,
+    ) -> bool {
+        if Self::is_paused(env.clone()) {
+            panic!("Contract is paused");
+        }
+        user.require_auth();
+
+        // Extend instance storage TTL and fetch stored Oracle public key
+        env.storage().instance().extend_ttl(172_800, 518_400);
+        let key = DataKey::OracleKey;
+        let oracle_pub_key: BytesN<32> = env
+            .storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| panic!("Contract not initialized"));
+
+        // Cryptographically verify signature matches the payload and Oracle public key
+        env.crypto().ed25519_verify(&oracle_pub_key, &payload, &signature);
+
+        let timestamp = env.ledger().timestamp();
+
+        // Emit telemetry proof verification event
+        env.events().publish(
+            (symbol_short!("telem"), symbol_short!("verified"), user),
+            timestamp,
+        );
+
+        true
     }
 
     /// Verifies biometric telemetry proof against Oracle key and publishes event
@@ -178,7 +243,7 @@ impl NeuroSyncContract {
     }
 
     /// Submits a signed sleep data shard.
-    /// Verifies the Oracle signature and updates the habit streak logic.
+    /// Verifies the Oracle signature, emits verification event, and updates the habit streak logic.
     pub fn submit_shard(
         env: Env,
         user: Address,
@@ -243,10 +308,12 @@ impl NeuroSyncContract {
         // 5. Implement habit streak logic:
         // Do NOT update last_timestamp if user submits early (< 24 hrs).
         // Only update last_timestamp when a legitimate daily streak increment or reset occurs.
+        let mut updated = false;
         if streak.last_timestamp == 0 {
             // First submission: initialize streak to 1
             streak.count = 1;
             streak.last_timestamp = current_timestamp;
+            updated = true;
         } else {
             // Enforce timestamp linearity
             if current_timestamp < streak.last_timestamp {
@@ -258,10 +325,12 @@ impl NeuroSyncContract {
                 // Submitted within 24 to 48 hours: increment streak count
                 streak.count += 1;
                 streak.last_timestamp = current_timestamp;
+                updated = true;
             } else if diff > 172_800 {
                 // Submitted after 48 hours: penalize and reset count to 1
                 streak.count = 1;
                 streak.last_timestamp = current_timestamp;
+                updated = true;
             }
             // If diff < 86_400 (less than 24 hours), count AND last_timestamp remain UNCHANGED.
         }
@@ -269,6 +338,13 @@ impl NeuroSyncContract {
         // 6. Save updated streak back to persistent storage and extend TTL
         env.storage().persistent().set(&streak_key, &streak);
         env.storage().persistent().extend_ttl(&streak_key, 172_800, 518_400);
+
+        if updated {
+            env.events().publish(
+                (symbol_short!("streak"), symbol_short!("updated"), user.clone()),
+                (streak.count, streak.last_timestamp),
+            );
+        }
 
         // 7. Synchronize streak data with Reward Distributor contract if configured
         if let Some(distributor_addr) = env.storage().instance().get::<DataKey, Address>(&DataKey::DistributorAddress) {
