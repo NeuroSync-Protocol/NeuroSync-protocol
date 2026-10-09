@@ -1,155 +1,119 @@
-"use client";
+'use client';
 
-import React from "react";
-import { ShieldCheck, Flame, Zap, Award, CheckCircle2 } from "lucide-react";
+import React from 'react';
+import { StreakMultiplierStatus } from '@/types/telemetry';
+import { AuthenticityScoreBadge } from './AuthenticityScoreBadge';
+import { Flame, Sparkles, TrendingUp, Zap, Coins } from 'lucide-react';
 
-export interface AuthenticityMetricCardProps {
-  authenticityScore: number; // e.g. 96 (%)
-  streakCount: number;       // e.g. 5 (days)
-  multiplier?: number;       // e.g. 1.5 (x)
-  totalVerifiedProofs?: number;
-  lastVerifiedHash?: string;
-  className?: string;
+interface AuthenticityMetricCardProps {
+  streakStatus: StreakMultiplierStatus;
+  authenticityScore: number;
+  onClaimClick?: () => void;
+  isClaiming?: boolean;
+  canClaim?: boolean;
 }
 
 export const AuthenticityMetricCard: React.FC<AuthenticityMetricCardProps> = ({
+  streakStatus,
   authenticityScore,
-  streakCount,
-  multiplier,
-  totalVerifiedProofs = 0,
-  lastVerifiedHash,
-  className = ""
+  onClaimClick,
+  isClaiming = false,
+  canClaim = true,
 }) => {
-  const computedMultiplier = multiplier || Number((1.0 + streakCount * 0.1).toFixed(2));
-
-  // Determine score health tier
-  const getScoreTier = (score: number) => {
-    if (score >= 90) {
-      return {
-        label: "Cryptographically Pristine",
-        colorText: "text-emerald-600 dark:text-emerald-400",
-        colorBg: "bg-emerald-50 dark:bg-emerald-950/40",
-        colorBorder: "border-emerald-200 dark:border-emerald-900/50",
-        badgeBg: "bg-emerald-500",
-      };
-    } else if (score >= 75) {
-      return {
-        label: "Verified Physiological Stream",
-        colorText: "text-blue-600 dark:text-blue-400",
-        colorBg: "bg-blue-50 dark:bg-blue-950/40",
-        colorBorder: "border-blue-200 dark:border-blue-900/50",
-        badgeBg: "bg-blue-500",
-      };
-    } else {
-      return {
-        label: "Requires Biometric Recalibration",
-        colorText: "text-amber-600 dark:text-amber-400",
-        colorBg: "bg-amber-50 dark:bg-amber-950/40",
-        colorBorder: "border-amber-200 dark:border-amber-900/50",
-        badgeBg: "bg-amber-500",
-      };
-    }
-  };
-
-  const tier = getScoreTier(authenticityScore);
-
   return (
-    <div
-      className={`rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm relative overflow-hidden transition-all ${className}`}
-    >
-      {/* Background glow orbs */}
-      <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-emerald-500/5 blur-2xl pointer-events-none" />
-      <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full bg-orange-500/5 blur-2xl pointer-events-none" />
+    <div className="w-full bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/40 border border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+      {/* Decorative background glow */}
+      <div className="absolute -top-12 -right-12 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-12 -left-12 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
-      {/* Card Header */}
-      <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
-        <div className="flex items-center space-x-2">
-          <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80">
-            <ShieldCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+      {/* Top Bar: Authenticity Badge & Multiplier */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6 relative z-10">
+        <AuthenticityScoreBadge score={authenticityScore} size="md" />
+
+        <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-bold">
+          <Sparkles className="w-3.5 h-3.5" />
+          <span>Multiplier: {streakStatus.multiplierDisplay}</span>
+        </div>
+      </div>
+
+      {/* Grid of Key Metrics */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 relative z-10">
+        {/* Streak Count */}
+        <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-4">
+          <div className="flex items-center justify-between text-slate-400 mb-2">
+            <span className="text-xs font-semibold uppercase tracking-wider">Active Streak</span>
+            <Flame className="w-4 h-4 text-orange-400" />
           </div>
-          <div>
-            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">
-              Biometric Authenticity & Multiplier
-            </h3>
-            <p className="text-[11px] text-slate-400">
-              Decentralized proof verification & habit yield boost
-            </p>
+          <div className="flex items-baseline gap-1">
+            <span className="text-3xl font-extrabold text-white">{streakStatus.currentStreak}</span>
+            <span className="text-xs text-slate-400 font-medium">Days</span>
           </div>
+          <p className="text-[11px] text-slate-400 mt-1">
+            Next Tier at {streakStatus.nextTierStreak} days
+          </p>
         </div>
 
-        <span
-          className={`px-3 py-1 rounded-full text-[10px] font-bold border flex items-center gap-1.5 ${tier.colorBg} ${tier.colorText} ${tier.colorBorder}`}
+        {/* Multiplier Bps */}
+        <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-4">
+          <div className="flex items-center justify-between text-slate-400 mb-2">
+            <span className="text-xs font-semibold uppercase tracking-wider">Streak Boost</span>
+            <Zap className="w-4 h-4 text-yellow-400" />
+          </div>
+          <div className="flex items-baseline gap-1">
+            <span className="text-3xl font-extrabold text-yellow-400">+{streakStatus.multiplierBps / 100}%</span>
+          </div>
+          <p className="text-[11px] text-slate-400 mt-1">
+            Applied to daily epoch rewards
+          </p>
+        </div>
+
+        {/* Total Estimated NSYNC */}
+        <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-4">
+          <div className="flex items-center justify-between text-slate-400 mb-2">
+            <span className="text-xs font-semibold uppercase tracking-wider">Epoch Reward</span>
+            <Coins className="w-4 h-4 text-indigo-400" />
+          </div>
+          <div className="flex items-baseline gap-1">
+            <span className="text-3xl font-extrabold text-indigo-400">{streakStatus.totalEstimatedRewardNSYNC}</span>
+            <span className="text-xs text-slate-400 font-medium">$NSYNC</span>
+          </div>
+          <p className="text-[11px] text-slate-400 mt-1">
+            Base: {streakStatus.baseRewardNSYNC} + Streak bonus
+          </p>
+        </div>
+      </div>
+
+      {/* Claim Button Bar */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-800 relative z-10">
+        <div className="flex items-center gap-2 text-xs text-slate-400">
+          <TrendingUp className="w-4 h-4 text-emerald-400" />
+          <span>Epoch settlement active • Telemetry proof verified</span>
+        </div>
+
+        <button
+          onClick={onClaimClick}
+          disabled={!canClaim || isClaiming}
+          className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-lg ${
+            canClaim && !isClaiming
+              ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white shadow-indigo-500/25 cursor-pointer active:scale-95'
+              : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+          }`}
         >
-          <span className={`h-1.5 w-1.5 rounded-full ${tier.badgeBg} animate-pulse`} />
-          {tier.label}
-        </span>
-      </div>
-
-      {/* Metric Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 my-5">
-        
-        {/* Biometric Authenticity Score */}
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 p-4 flex flex-col justify-between">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              Authenticity Score
-            </span>
-            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-black font-mono text-slate-900 dark:text-slate-50">
-              {authenticityScore}%
-            </span>
-            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-              Oracle Validated
-            </span>
-          </div>
-          {/* Progress track */}
-          <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
-            <div
-              className="bg-emerald-500 h-full rounded-full transition-all duration-500"
-              style={{ width: `${Math.min(100, Math.max(0, authenticityScore))}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Streak Multiplier Status */}
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 p-4 flex flex-col justify-between">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              Streak Multiplier
-            </span>
-            <Flame className="h-4 w-4 text-orange-500 fill-current animate-pulse" />
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-black font-mono text-orange-600 dark:text-orange-400">
-              {computedMultiplier}x
-            </span>
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-              ({streakCount} Day Streak)
-            </span>
-          </div>
-          <div className="text-[10px] text-slate-400 mt-2 font-mono flex items-center gap-1">
-            <Zap className="h-3 w-3 text-amber-500" />
-            +{(streakCount * 10)}% yield boost on $NSYNC epoch rewards
-          </div>
-        </div>
-
-      </div>
-
-      {/* Bottom Proof Info */}
-      <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center justify-between text-[11px] text-slate-400">
-        <span className="flex items-center gap-1 font-mono">
-          <Award className="h-3.5 w-3.5 text-blue-500" />
-          {totalVerifiedProofs} Total Shards Ingested
-        </span>
-        {lastVerifiedHash && (
-          <span className="font-mono text-[10px] truncate max-w-[200px]" title={lastVerifiedHash}>
-            Hash: {lastVerifiedHash.slice(0, 10)}...{lastVerifiedHash.slice(-6)}
-          </span>
-        )}
+          {isClaiming ? (
+            <>
+              <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+              <span>Claiming Reward...</span>
+            </>
+          ) : (
+            <>
+              <Coins className="w-4 h-4" />
+              <span>Claim Epoch Allocation</span>
+            </>
+          )}
+        </button>
       </div>
     </div>
   );
 };
+
 export default AuthenticityMetricCard;

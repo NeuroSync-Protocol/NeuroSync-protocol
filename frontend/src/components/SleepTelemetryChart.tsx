@@ -1,356 +1,259 @@
-"use client";
+'use client';
 
-import React, { useState } from "react";
-import { Moon, Activity, Zap, ShieldCheck } from "lucide-react";
-
-export interface TelemetryEpochData {
-  dayLabel: string;
-  remSleepHours: number;
-  deepSleepHours: number;
-  lightSleepHours: number;
-  hrvMs: number;
-  dateStr?: string;
-  authenticityScore?: number;
-}
+import React, { useState } from 'react';
+import { TelemetryEpochPoint, DateRangeFilter } from '@/types/telemetry';
+import { Calendar, BarChart3, Activity, HeartPulse } from 'lucide-react';
 
 interface SleepTelemetryChartProps {
-  data?: TelemetryEpochData[];
-  title?: string;
-  subtitle?: string;
+  data?: TelemetryEpochPoint[];
+  isLoading?: boolean;
+  onEpochSelect?: (point: TelemetryEpochPoint) => void;
 }
 
-const DEFAULT_EPOCH_DATA: TelemetryEpochData[] = [
-  { dayLabel: "Day 1", remSleepHours: 1.8, deepSleepHours: 1.6, lightSleepHours: 4.2, hrvMs: 68, authenticityScore: 96 },
-  { dayLabel: "Day 2", remSleepHours: 2.1, deepSleepHours: 1.9, lightSleepHours: 3.8, hrvMs: 74, authenticityScore: 98 },
-  { dayLabel: "Day 3", remSleepHours: 1.5, deepSleepHours: 1.2, lightSleepHours: 4.5, hrvMs: 59, authenticityScore: 92 },
-  { dayLabel: "Day 4", remSleepHours: 2.3, deepSleepHours: 2.0, lightSleepHours: 3.9, hrvMs: 82, authenticityScore: 99 },
-  { dayLabel: "Day 5", remSleepHours: 1.9, deepSleepHours: 1.7, lightSleepHours: 4.1, hrvMs: 71, authenticityScore: 95 },
-  { dayLabel: "Day 6", remSleepHours: 2.4, deepSleepHours: 2.2, lightSleepHours: 3.6, hrvMs: 88, authenticityScore: 100 },
-  { dayLabel: "Day 7", remSleepHours: 2.0, deepSleepHours: 1.8, lightSleepHours: 4.0, hrvMs: 76, authenticityScore: 97 },
-];
-
 export const SleepTelemetryChart: React.FC<SleepTelemetryChartProps> = ({
-  data = DEFAULT_EPOCH_DATA,
-  title = "7-Day Sleep Telemetry & Architecture Epoch",
-  subtitle = "Cryptographically signed sleep stage breakdown and heart-rate variability (HRV) stream"
+  data = [],
+  isLoading = false,
+  onEpochSelect,
 }) => {
-  const [activeMetric, setActiveMetric] = useState<"stacked" | "hrv">("stacked");
-  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  const [activeRange, setActiveRange] = useState<DateRangeFilter['label']>('7D');
+  const [selectedMetric, setSelectedMetric] = useState<'architecture' | 'hrv'>('architecture');
+  const [hoveredPoint, setHoveredPoint] = useState<TelemetryEpochPoint | null>(null);
 
-  const epochs = data.length > 0 ? data : DEFAULT_EPOCH_DATA;
-
-  // Max total duration for sleep stack scaling (e.g., 10 hrs)
-  const maxSleepHours = 10;
-  // Max HRV for line chart scaling
-  const maxHrv = 120;
-  const minHrv = 40;
-
-  // Canvas / SVG Dimensions
-  const svgWidth = 700;
-  const svgHeight = 260;
-  const paddingLeft = 50;
-  const paddingRight = 40;
-  const paddingTop = 30;
-  const paddingBottom = 40;
-  const plotWidth = svgWidth - paddingLeft - paddingRight;
-  const plotHeight = svgHeight - paddingTop - paddingBottom;
-
-  const barSlotWidth = plotWidth / epochs.length;
-  const barWidth = Math.min(42, barSlotWidth * 0.65);
-
-  // SVG coordinate helpers
-  const getYForHours = (hours: number) => {
-    return paddingTop + plotHeight - (hours / maxSleepHours) * plotHeight;
-  };
-
-  const getYForHrv = (hrv: number) => {
-    const clamped = Math.max(minHrv, Math.min(maxHrv, hrv));
-    return paddingTop + plotHeight - ((clamped - minHrv) / (maxHrv - minHrv)) * plotHeight;
-  };
-
-  const getXForIndex = (index: number) => {
-    return paddingLeft + index * barSlotWidth + barSlotWidth / 2;
-  };
-
-  // Generate HRV SVG path
-  const hrvPoints = epochs.map((d, i) => `${getXForIndex(i)},${getYForHrv(d.hrvMs)}`).join(" ");
+  const displayData = data.slice(0, activeRange === '7D' ? 7 : activeRange === '14D' ? 14 : 30);
+  const maxHours = Math.max(...displayData.map((d) => d.totalSleepHours || 9), 9);
+  const maxHrv = Math.max(...displayData.map((d) => d.hrvMs || 100), 100);
+  const minHrv = Math.min(...displayData.map((d) => d.hrvMs || 20), 20);
 
   return (
-    <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm transition-all">
+    <div className="w-full bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-2xl backdrop-blur-md">
       {/* Header and Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-100 dark:border-slate-800">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-slate-800/80">
         <div>
-          <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-            <Moon className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-            <span>{title}</span>
-          </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            {subtitle}
+          <div className="flex items-center gap-2.5">
+            <span className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+              <BarChart3 className="w-5 h-5" />
+            </span>
+            <h2 className="text-xl font-bold text-white tracking-wide">
+              Sleep Telemetry Architecture
+            </h2>
+          </div>
+          <p className="text-sm text-slate-400 mt-1">
+            Multistage biometric breakdown & Heart Rate Variability over epochs
           </p>
         </div>
 
-        {/* View toggles */}
-        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 self-start sm:self-auto">
-          <button
-            onClick={() => setActiveMetric("stacked")}
-            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-              activeMetric === "stacked"
-                ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs"
-                : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-            }`}
-          >
-            Sleep Architecture
-          </button>
-          <button
-            onClick={() => setActiveMetric("hrv")}
-            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-              activeMetric === "hrv"
-                ? "bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs"
-                : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-            }`}
-          >
-            HRV Autonomic Stream
-          </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Metric Selector */}
+          <div className="flex bg-slate-800/80 p-1 rounded-xl border border-slate-700/50">
+            <button
+              onClick={() => setSelectedMetric('architecture')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                selectedMetric === 'architecture'
+                  ? 'bg-indigo-600 text-white shadow'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Sleep Phases
+            </button>
+            <button
+              onClick={() => setSelectedMetric('hrv')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1 ${
+                selectedMetric === 'hrv'
+                  ? 'bg-indigo-600 text-white shadow'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Activity className="w-3.5 h-3.5" />
+              HRV Overlay
+            </button>
+          </div>
+
+          {/* Date Range Selector */}
+          <div className="flex bg-slate-800/80 p-1 rounded-xl border border-slate-700/50">
+            {(['7D', '14D', '30D'] as const).map((range) => (
+              <button
+                key={range}
+                onClick={() => setActiveRange(range)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                  activeRange === range
+                    ? 'bg-slate-700 text-white shadow'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {range}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Legend */}
-      <div className="flex flex-wrap items-center gap-4 py-3 text-xs text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800/60">
-        <div className="flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded-sm bg-indigo-500" />
-          <span>Deep Sleep (Slow-Wave)</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded-sm bg-purple-500" />
-          <span>REM Sleep (Cognitive)</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded-sm bg-blue-400" />
-          <span>Light Sleep (NREM 1/2)</span>
-        </div>
-        <div className="flex items-center gap-1.5 ml-auto">
-          <span className="h-2 w-5 rounded-full bg-emerald-500" />
-          <span>HRV Baseline (ms)</span>
-        </div>
+      <div className="flex items-center gap-6 mt-4 text-xs font-medium text-slate-300">
+        {selectedMetric === 'architecture' ? (
+          <>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded bg-purple-500 shadow-sm" />
+              <span>REM Sleep</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded bg-indigo-500 shadow-sm" />
+              <span>Deep Sleep</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded bg-sky-400 shadow-sm" />
+              <span>Light Sleep</span>
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full bg-emerald-400 shadow-sm" />
+            <span className="text-emerald-400 font-semibold">Heart Rate Variability (rMSSD in ms)</span>
+          </div>
+        )}
       </div>
 
-      {/* Responsive SVG Canvas */}
-      <div className="relative mt-4 w-full overflow-x-auto">
-        <svg
-          viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-          className="w-full h-auto min-w-[550px] overflow-visible select-none"
-        >
-          <defs>
-            <linearGradient id="deepSleepGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#6366f1" stopOpacity="0.95" />
-              <stop offset="100%" stopColor="#4338ca" stopOpacity="0.95" />
-            </linearGradient>
-            <linearGradient id="remSleepGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#a855f7" stopOpacity="0.95" />
-              <stop offset="100%" stopColor="#7e22ce" stopOpacity="0.95" />
-            </linearGradient>
-            <linearGradient id="lightSleepGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.95" />
-              <stop offset="100%" stopColor="#0284c7" stopOpacity="0.95" />
-            </linearGradient>
-            <linearGradient id="hrvAreaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#10b981" stopOpacity="0.25" />
-              <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
-            </linearGradient>
-          </defs>
+      {/* Main Chart Canvas */}
+      <div className="relative w-full h-72 mt-6 overflow-x-auto">
+        {isLoading ? (
+          <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-slate-500">
+            <div className="w-8 h-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+            <span className="text-xs font-medium">Loading telemetry streams...</span>
+          </div>
+        ) : displayData.length === 0 ? (
+          <div className="w-full h-full flex flex-col items-center justify-center text-slate-500">
+            <Calendar className="w-10 h-10 mb-2 opacity-50" />
+            <p className="text-sm">No telemetry records found for current epoch range.</p>
+          </div>
+        ) : selectedMetric === 'hrv' ? (
+          /* HRV Time-Series Line Graph SVG Overlay */
+          <div className="w-full h-full flex flex-col justify-end pt-4 pb-2">
+            <svg className="w-full h-48 overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="hrvGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#34d399" stopOpacity="0.4" />
+                  <stop offset="100%" stopColor="#34d399" stopOpacity="0.0" />
+                </linearGradient>
+              </defs>
 
-          {/* Grid lines */}
-          {[0, 2.5, 5.0, 7.5, 10.0].map((h) => {
-            const y = getYForHours(h);
-            return (
-              <g key={`grid-${h}`}>
-                <line
-                  x1={paddingLeft}
-                  y1={y}
-                  x2={svgWidth - paddingRight}
-                  y2={y}
-                  stroke="currentColor"
-                  className="text-slate-100 dark:text-slate-800/80"
-                  strokeDasharray="4 4"
+              {/* Area under curve */}
+              {displayData.length > 1 && (
+                <polygon
+                  fill="url(#hrvGradient)"
+                  points={`0,100 ${displayData
+                    .map((item, index) => {
+                      const x = (index / (displayData.length - 1)) * 100;
+                      const y = 100 - ((item.hrvMs - minHrv) / (maxHrv - minHrv || 1)) * 80;
+                      return `${x},${y}`;
+                    })
+                    .join(' ')} 100,100`}
                 />
-                <text
-                  x={paddingLeft - 8}
-                  y={y + 3}
-                  textAnchor="end"
-                  className="text-[10px] fill-slate-400 font-mono"
-                >
-                  {h}h
-                </text>
-              </g>
-            );
-          })}
+              )}
 
-          {/* Right Y-Axis (HRV scale) */}
-          {[40, 60, 80, 100, 120].map((hrv) => {
-            const y = getYForHrv(hrv);
-            return (
-              <text
-                key={`hrv-label-${hrv}`}
-                x={svgWidth - paddingRight + 8}
-                y={y + 3}
-                textAnchor="start"
-                className="text-[10px] fill-emerald-600/70 dark:fill-emerald-400/70 font-mono"
-              >
-                {hrv}ms
-              </text>
-            );
-          })}
-
-          {/* Stacked Bars */}
-          {activeMetric === "stacked" &&
-            epochs.map((epoch, idx) => {
-              const x = getXForIndex(idx) - barWidth / 2;
-              const totalSleep = epoch.deepSleepHours + epoch.remSleepHours + epoch.lightSleepHours;
-
-              const deepHeight = (epoch.deepSleepHours / maxSleepHours) * plotHeight;
-              const remHeight = (epoch.remSleepHours / maxSleepHours) * plotHeight;
-              const lightHeight = (epoch.lightSleepHours / maxSleepHours) * plotHeight;
-
-              const deepY = paddingTop + plotHeight - deepHeight;
-              const remY = deepY - remHeight;
-              const lightY = remY - lightHeight;
-
-              const isHovered = hoveredIdx === idx;
-
-              return (
-                <g
-                  key={`bar-group-${idx}`}
-                  className="cursor-pointer transition-opacity"
-                  opacity={hoveredIdx !== null && !isHovered ? 0.45 : 1}
-                  onMouseEnter={() => setHoveredIdx(idx)}
-                  onMouseLeave={() => setHoveredIdx(null)}
-                >
-                  {/* Deep Sleep */}
-                  <rect
-                    x={x}
-                    y={deepY}
-                    width={barWidth}
-                    height={deepHeight}
-                    rx={2}
-                    fill="url(#deepSleepGrad)"
-                  />
-                  {/* REM Sleep */}
-                  <rect
-                    x={x}
-                    y={remY}
-                    width={barWidth}
-                    height={remHeight}
-                    rx={2}
-                    fill="url(#remSleepGrad)"
-                  />
-                  {/* Light Sleep (rounded top corners) */}
-                  <rect
-                    x={x}
-                    y={lightY}
-                    width={barWidth}
-                    height={lightHeight}
-                    rx={4}
-                    fill="url(#lightSleepGrad)"
-                  />
-
-                  {/* Authenticity Badge Indicator */}
-                  {epoch.authenticityScore && (
-                    <circle
-                      cx={getXForIndex(idx)}
-                      cy={lightY - 10}
-                      r={3.5}
-                      className={
-                        epoch.authenticityScore >= 95
-                          ? "fill-emerald-500"
-                          : "fill-blue-500"
-                      }
-                    />
-                  )}
-                </g>
-              );
-            })}
-
-          {/* HRV Line Overlay / Dedicated View */}
-          <g>
-            {activeMetric === "hrv" && (
-              <polygon
-                points={`${getXForIndex(0)},${paddingTop + plotHeight} ${hrvPoints} ${getXForIndex(epochs.length - 1)},${paddingTop + plotHeight}`}
-                fill="url(#hrvAreaGrad)"
-              />
-            )}
-            <polyline
-              fill="none"
-              stroke="#10b981"
-              strokeWidth={activeMetric === "hrv" ? 3 : 2}
-              strokeDasharray={activeMetric === "stacked" ? "3 3" : undefined}
-              points={hrvPoints}
-            />
-            {epochs.map((epoch, idx) => {
-              const cx = getXForIndex(idx);
-              const cy = getYForHrv(epoch.hrvMs);
-              const isHovered = hoveredIdx === idx;
-              return (
-                <circle
-                  key={`hrv-dot-${idx}`}
-                  cx={cx}
-                  cy={cy}
-                  r={isHovered ? 6 : 4}
-                  className="fill-white dark:fill-slate-900 stroke-emerald-500 stroke-2 cursor-pointer transition-all"
-                  onMouseEnter={() => setHoveredIdx(idx)}
-                  onMouseLeave={() => setHoveredIdx(null)}
+              {/* HRV Path Line */}
+              {displayData.length > 1 && (
+                <polyline
+                  fill="none"
+                  stroke="#34d399"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  points={displayData
+                    .map((item, index) => {
+                      const x = (index / (displayData.length - 1)) * 100;
+                      const y = 100 - ((item.hrvMs - minHrv) / (maxHrv - minHrv || 1)) * 80;
+                      return `${x},${y}`;
+                    })
+                    .join(' ')}
                 />
-              );
-            })}
-          </g>
+              )}
+            </svg>
 
-          {/* X Axis Day Labels */}
-          {epochs.map((epoch, idx) => {
-            const x = getXForIndex(idx);
-            return (
-              <text
-                key={`xlabel-${idx}`}
-                x={x}
-                y={paddingTop + plotHeight + 20}
-                textAnchor="middle"
-                className={`text-xs font-semibold ${
-                  hoveredIdx === idx
-                    ? "fill-blue-600 dark:fill-blue-400 font-bold"
-                    : "fill-slate-500 dark:fill-slate-400"
-                }`}
-              >
-                {epoch.dayLabel}
-              </text>
-            );
-          })}
-        </svg>
-
-        {/* Hover Tooltip Overlay */}
-        {hoveredIdx !== null && epochs[hoveredIdx] && (
-          <div className="mt-3 p-3.5 rounded-2xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xl flex flex-wrap items-center justify-between gap-4 text-xs font-mono animate-in fade-in duration-150">
-            <div>
-              <span className="font-bold text-sm block">
-                {epochs[hoveredIdx].dayLabel} Telemetry Telemetry Shard
-              </span>
-              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-sans">
-                Authenticity: {epochs[hoveredIdx].authenticityScore || 98}% Verified Proof
-              </span>
+            {/* X-axis indicators */}
+            <div className="w-full flex justify-between items-center mt-3 px-1">
+              {displayData.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex flex-col items-center cursor-pointer group"
+                  onMouseEnter={() => setHoveredPoint(item)}
+                  onMouseLeave={() => setHoveredPoint(null)}
+                >
+                  <span className="text-xs font-semibold text-emerald-400 group-hover:scale-110 transition-transform">
+                    {Math.round(item.hrvMs)}ms
+                  </span>
+                  <span className="text-[11px] text-slate-500 mt-1">{item.date}</span>
+                </div>
+              ))}
             </div>
-            <div className="flex items-center gap-4">
-              <div>
-                <span className="text-slate-400 dark:text-slate-500 text-[10px] block">Deep Sleep</span>
-                <span className="font-bold text-indigo-400 dark:text-indigo-600">{epochs[hoveredIdx].deepSleepHours}h</span>
+          </div>
+        ) : (
+          /* Multi-stage sleep bars */
+          <div className="w-full h-full flex items-end justify-between gap-3 pt-6 pb-2">
+            {displayData.map((item) => {
+              const remHeight = (item.remHours / maxHours) * 100;
+              const deepHeight = (item.deepHours / maxHours) * 100;
+              const lightHeight = (item.lightHours / maxHours) * 100;
+
+              return (
+                <div
+                  key={item.id}
+                  className="flex-1 flex flex-col items-center h-full justify-end group cursor-pointer"
+                  onClick={() => onEpochSelect?.(item)}
+                  onMouseEnter={() => setHoveredPoint(item)}
+                  onMouseLeave={() => setHoveredPoint(null)}
+                >
+                  <div className="w-full max-w-[48px] bg-slate-800/60 rounded-t-lg overflow-hidden flex flex-col-reverse justify-start transition-transform group-hover:scale-105 duration-200">
+                    <div
+                      style={{ height: `${deepHeight}%` }}
+                      className="w-full bg-indigo-500 hover:bg-indigo-400 transition-colors"
+                    />
+                    <div
+                      style={{ height: `${lightHeight}%` }}
+                      className="w-full bg-sky-400 hover:bg-sky-300 transition-colors"
+                    />
+                    <div
+                      style={{ height: `${remHeight}%` }}
+                      className="w-full bg-purple-500 hover:bg-purple-400 transition-colors"
+                    />
+                  </div>
+
+                  <span className="text-xs font-medium text-slate-400 mt-2 truncate w-full text-center">
+                    {item.date}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Hover Tooltip Card */}
+        {hoveredPoint && (
+          <div className="absolute top-2 right-2 bg-slate-800/95 border border-slate-700 rounded-xl p-3 shadow-2xl backdrop-blur-md pointer-events-none z-10 text-xs">
+            <p className="font-bold text-white mb-1.5 flex items-center gap-1.5">
+              <span>{hoveredPoint.date}</span>
+              <span className="text-slate-400">(Epoch {hoveredPoint.epochDay})</span>
+            </p>
+            <div className="space-y-1 text-slate-300">
+              <div className="flex justify-between gap-4">
+                <span className="text-emerald-400 flex items-center gap-1">
+                  <HeartPulse className="w-3 h-3" /> HRV rMSSD:
+                </span>
+                <span className="font-semibold text-emerald-300">{hoveredPoint.hrvMs.toFixed(1)} ms</span>
               </div>
-              <div>
-                <span className="text-slate-400 dark:text-slate-500 text-[10px] block">REM Sleep</span>
-                <span className="font-bold text-purple-400 dark:text-purple-600">{epochs[hoveredIdx].remSleepHours}h</span>
+              <div className="flex justify-between gap-4">
+                <span className="text-purple-400">REM Sleep:</span>
+                <span className="font-semibold">{hoveredPoint.remHours.toFixed(1)} hrs</span>
               </div>
-              <div>
-                <span className="text-slate-400 dark:text-slate-500 text-[10px] block">Light Sleep</span>
-                <span className="font-bold text-sky-400 dark:text-sky-600">{epochs[hoveredIdx].lightSleepHours}h</span>
+              <div className="flex justify-between gap-4">
+                <span className="text-indigo-400">Deep Sleep:</span>
+                <span className="font-semibold">{hoveredPoint.deepHours.toFixed(1)} hrs</span>
               </div>
-              <div>
-                <span className="text-slate-400 dark:text-slate-500 text-[10px] block">HRV</span>
-                <span className="font-bold text-emerald-400 dark:text-emerald-600">{epochs[hoveredIdx].hrvMs} ms</span>
+              <div className="flex justify-between gap-4">
+                <span className="text-sky-400">Light Sleep:</span>
+                <span className="font-semibold">{hoveredPoint.lightHours.toFixed(1)} hrs</span>
+              </div>
+              <div className="border-t border-slate-700/80 pt-1 mt-1 flex justify-between gap-4 font-bold text-white">
+                <span>Total Sleep:</span>
+                <span>{hoveredPoint.totalSleepHours.toFixed(1)} hrs</span>
               </div>
             </div>
           </div>
@@ -359,4 +262,5 @@ export const SleepTelemetryChart: React.FC<SleepTelemetryChartProps> = ({
     </div>
   );
 };
+
 export default SleepTelemetryChart;
