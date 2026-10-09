@@ -110,3 +110,24 @@ body {
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite linear;
 }
+
+/* Sleep Analytics Chart Custom Color Contrast Tokens */
+:root {
+  --chart-rem-glow: rgba(168, 85, 247, 0.35);
+  --chart-deep-glow: rgba(99, 102, 241, 0.35);
+  --chart-light-glow: rgba(56, 189, 248, 0.35);
+  --chart-hrv-emerald: #10b981;
+}
+
+.sleep-stage-rem {
+  background-color: #a855f7;
+  box-shadow: 0 0 10px var(--chart-rem-glow);
+}
+.sleep-stage-deep {
+  background-color: #6366f1;
+  box-shadow: 0 0 10px var(--chart-deep-glow);
+}
+.sleep-stage-light {
+  background-color: #38bdf8;
+  box-shadow: 0 0 10px var(--chart-light-glow);
+}

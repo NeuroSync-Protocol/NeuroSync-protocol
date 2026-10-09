@@ -7,6 +7,7 @@ import {
   Coins, ShieldCheck, ArrowUpRight, 
   RefreshCw, Sparkles, Loader2, CheckCircle
 } from "lucide-react";
+import { ToastContainer, ClaimTransactionSkeleton, ToastMessage } from "../../components/TransactionFeedback";
 
 interface RewardClaimRecord {
   timestamp: number;
@@ -25,6 +26,19 @@ export default function RewardsPage() {
   const [claimStep, setClaimStep] = useState<"idle" | "simulating" | "signing" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [txHash, setTxHash] = useState("");
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const addToast = (toast: Omit<ToastMessage, "id">) => {
+    const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    setToasts((prev) => [...prev, { ...toast, id }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 6000);
+  };
+
+  const dismissToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
 
   const claimedKey = `nsync_claimed_${publicKey}`;
   const claimHistoryKey = `nsync_claim_history_${publicKey}`;
@@ -166,10 +180,24 @@ export default function RewardsPage() {
       setHasClaimedToday(true);
       setTxHash(hash);
       setClaimStep("success");
+
+      addToast({
+        type: "success",
+        title: "Telemetry Reward Claimed Successfully!",
+        description: `Successfully claimed ${claimAmount.toFixed(2)} $NSYNC tokens directly to your wallet via Gas Master Relayer.`,
+        txHash: hash,
+      });
     } catch (err: any) {
       console.error("Error claiming reward via Gas Master:", err);
-      setErrorMsg(err.message || "Stellar reward claim transaction failed.");
+      const msg = err.message || "Stellar reward claim transaction failed.";
+      setErrorMsg(msg);
       setClaimStep("error");
+
+      addToast({
+        type: "error",
+        title: "Claim Transaction Failed",
+        description: msg,
+      });
     }
   };
 
@@ -224,9 +252,15 @@ export default function RewardsPage() {
             </p>
           </div>
         ) : loading ? (
-          <div className="flex flex-col items-center justify-center py-20 space-y-4">
-            <Loader2 className="h-10 w-10 text-blue-600 animate-spin" />
-            <p className="text-sm text-slate-500 font-medium">Fetching dynamic rewards balances...</p>
+          <div className="space-y-6">
+            <div className="flex items-center justify-center gap-2 text-sm text-slate-500 font-medium">
+              <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
+              <span>Fetching dynamic telemetry rewards balances...</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <ClaimTransactionSkeleton />
+              <ClaimTransactionSkeleton />
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -475,6 +509,9 @@ export default function RewardsPage() {
 
           </div>
         )}
+
+        {/* Toast Notification Container */}
+        <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
         {/* Footer */}
         <footer className="mt-auto pt-12 border-t border-slate-200 dark:border-slate-800 flex flex-col md:flex-row items-center justify-between text-xs text-slate-400 dark:text-slate-500 gap-4">
