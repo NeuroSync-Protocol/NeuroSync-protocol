@@ -113,7 +113,7 @@ export const SleepTelemetryChart: React.FC<SleepTelemetryChartProps> = ({
       </div>
 
       {/* Main Chart Canvas */}
-      <div className="relative w-full h-72 mt-6">
+      <div className="relative w-full h-72 mt-6 overflow-x-auto">
         {isLoading ? (
           <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-slate-500">
             <div className="w-8 h-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
