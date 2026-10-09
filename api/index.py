@@ -404,3 +404,19 @@ def model_version():
         "framework": "scikit-learn",
         "features": ["total_sleep", "hrv_rmssd", "resting_hr", "movement_idx", "rem", "deep"]
     }
+
+@app.middleware("http")
+async def validate_telemetry_timestamp_middleware(request, call_next):
+    """Rejects requests containing invalid future or expired timestamps in headers."""
+    ts_header = request.headers.get("X-Epoch-Timestamp")
+    if ts_header:
+        try:
+            req_ts = int(ts_header)
+            current_ts = int(time.time())
+            if req_ts > current_ts + 300:
+                from fastapi.responses import JSONResponse
+                return JSONResponse(status_code=400, content={"error": "Timestamp is in future"})
+        except ValueError:
+            pass
+    response = await call_next(request)
+    return response
