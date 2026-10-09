@@ -103,3 +103,35 @@ def generate_adversarial_spoof(subject_id: str, timestamp: int) -> BiometricEpoc
         is_adversarial_spoof=True,
         authenticity_label=0
     )
+
+import json
+
+def generate_telemetry_dataset(
+    n_samples: int = 100,
+    spoof_ratio: float = 0.2,
+    fragmented_ratio: float = 0.2
+) -> List[BiometricEpochTelemetry]:
+    """Generates a diverse synthetic dataset across normal, fragmented, and spoofed profiles."""
+    records = []
+    base_ts = int(time.time()) - (n_samples * 86400)
+    
+    for i in range(n_samples):
+        subject_id = f"sub_{i % 10:04d}"
+        ts = base_ts + (i * 86400)
+        roll = random.random()
+        
+        if roll < spoof_ratio:
+            rec = generate_adversarial_spoof(subject_id, ts)
+        elif roll < (spoof_ratio + fragmented_ratio):
+            rec = generate_fragmented_profile(subject_id, ts)
+        else:
+            rec = generate_normal_profile(subject_id, ts)
+            
+        records.append(rec)
+    return records
+
+def export_ndjson(records: List[BiometricEpochTelemetry], filepath: str):
+    """Exports records into Newline-Delimited JSON (NDJSON) format."""
+    with open(filepath, 'w') as f:
+        for r in records:
+            f.write(r.model_dump_json() + '\n')
