@@ -1,6 +1,24 @@
 #![no_std]
 use soroban_sdk::{contract, contractclient, contractimpl, contracttype, symbol_short, Address, Env};
 
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EpochRewardClaimedEvent {
+    pub user: Address,
+    pub day_epoch: u64,
+    pub amount: i128,
+    pub streak: u32,
+    pub multiplier_bps: u32,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MultiplierStreakEvent {
+    pub user: Address,
+    pub count: u32,
+    pub timestamp: u64,
+}
+
 #[contractclient(name = "TokenClient")]
 pub trait TokenInterface {
     fn transfer(env: Env, from: Address, to: Address, amount: i128);
@@ -114,8 +132,12 @@ impl RewardDistributor {
 
         // Emit streak update event
         env.events().publish(
-            (symbol_short!("streak"), symbol_short!("updated"), user),
-            (count, ts),
+            (symbol_short!("streak"), symbol_short!("mult"), user.clone()),
+            MultiplierStreakEvent {
+                user,
+                count,
+                timestamp: ts,
+            },
         );
     }
 
@@ -210,10 +232,17 @@ impl RewardDistributor {
         env.storage().persistent().set(&claim_key, &true);
         env.storage().persistent().extend_ttl(&claim_key, 172_800, 518_400);
 
-        // 7. Emit reward claim event
+        // 7. Emit epoch claim event with multiplier status
+        let multiplier_bps = 1000 + (streak * 100);
         env.events().publish(
-            (symbol_short!("reward"), symbol_short!("claimed"), user),
-            (day_epoch, pending_amount, streak),
+            (symbol_short!("epoch"), symbol_short!("claim"), user.clone()),
+            EpochRewardClaimedEvent {
+                user,
+                day_epoch,
+                amount: pending_amount,
+                streak,
+                multiplier_bps,
+            },
         );
     }
 
