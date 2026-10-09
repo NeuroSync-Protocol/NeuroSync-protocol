@@ -199,3 +199,9 @@ export const useWallet = () => {
   }
   return context;
 };
+
+// Auto-reconnect and session persistence helper
+export const checkFreighterSession = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  return Boolean(localStorage.getItem('neurosync_wallet_connected'));
+};
