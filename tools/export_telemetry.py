@@ -34,3 +34,19 @@ def export_to_csv(
         writer.writeheader()
         for row in sanitized_rows:
             writer.writerow(row)
+
+def export_to_open_health_json(
+    records: List[BiometricEpochTelemetry],
+    output_path: str,
+    provider_name: str = "NeuroSync Decentralized Protocol"
+):
+    """Exports telemetry records into open health JSON schema (FHIR/OpenmHealth compatible)."""
+    sanitized_records = [sanitize_record(r) for r in records]
+    payload = {
+        "schema_version": "1.0.0",
+        "provider": provider_name,
+        "record_count": len(sanitized_records),
+        "data": sanitized_records
+    }
+    with open(output_path, "w") as f:
+        json.dump(payload, f, indent=2)
