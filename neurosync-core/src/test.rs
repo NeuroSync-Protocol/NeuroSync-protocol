@@ -122,3 +122,41 @@ fn test_expired_signature_timestamp_edge_cases() {
     // Future timestamp (drift error)
     assert_eq!(client.is_timestamp_valid(&105_000, &3600), false);
 }
+
+#[test]
+fn test_nonce_replay_protection_lifecycle() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(NeuroSyncContract, ());
+    let client = NeuroSyncContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let oracle_key = BytesN::from_array(&env, &[1u8; 32]);
+    client.init(&admin, &oracle_key);
+
+    let nonce = BytesN::from_array(&env, &[42u8; 32]);
+    assert_eq!(client.is_nonce_used(&nonce), false);
+
+    client.record_nonce(&nonce);
+    assert_eq!(client.is_nonce_used(&nonce), true);
+}
+
+#[test]
+#[should_panic(expected = "Nonce already used")]
+fn test_nonce_replay_rejection() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(NeuroSyncContract, ());
+    let client = NeuroSyncContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let oracle_key = BytesN::from_array(&env, &[1u8; 32]);
+    client.init(&admin, &oracle_key);
+
+    let nonce = BytesN::from_array(&env, &[42u8; 32]);
+    client.record_nonce(&nonce);
+    // Second invocation with same nonce must panic
+    client.record_nonce(&nonce);
+}

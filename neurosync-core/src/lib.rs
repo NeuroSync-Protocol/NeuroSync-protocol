@@ -38,6 +38,7 @@ pub enum DataKey {
     UserStreak(Address),
     LastSubmission(Address),
     Paused,
+    UsedNonce(BytesN<32>),
 }
 
 #[contracttype]
@@ -301,6 +302,22 @@ impl NeuroSyncContract {
             return false;
         }
         current_ts - proof_timestamp <= max_age_seconds
+    }
+
+    /// Check if a replay prevention nonce has already been consumed
+    pub fn is_nonce_used(env: Env, nonce: BytesN<32>) -> bool {
+        let nonce_key = DataKey::UsedNonce(nonce);
+        env.storage().persistent().get(&nonce_key).unwrap_or(false)
+    }
+
+    /// Record a verified nonce into storage, preventing replay
+    pub fn record_nonce(env: Env, nonce: BytesN<32>) {
+        let nonce_key = DataKey::UsedNonce(nonce);
+        if env.storage().persistent().has(&nonce_key) {
+            panic!("Nonce already used");
+        }
+        env.storage().persistent().set(&nonce_key, &true);
+        env.storage().persistent().extend_ttl(&nonce_key, 172_800, 518_400);
     }
 }
 
