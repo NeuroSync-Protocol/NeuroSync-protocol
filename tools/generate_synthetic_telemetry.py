@@ -66,3 +66,40 @@ def generate_fragmented_profile(subject_id: str, timestamp: int) -> BiometricEpo
         is_adversarial_spoof=False,
         authenticity_label=1
     )
+
+def generate_adversarial_spoof(subject_id: str, timestamp: int) -> BiometricEpochTelemetry:
+    """Injects biologically implausible adversarial telemetry attempting to game streak rewards."""
+    spoof_type = random.choice(["constant_hrv", "impossible_duration", "zero_movement", "negative_phase_distribution"])
+    
+    if spoof_type == "constant_hrv":
+        total_sleep = 8.0
+        hrv = 195.0
+        rhr = 40.0
+        movement = 0.01
+    elif spoof_type == "impossible_duration":
+        total_sleep = 18.5
+        hrv = 110.0
+        rhr = 55.0
+        movement = 1.0
+    else:
+        total_sleep = 9.0
+        hrv = 240.0
+        rhr = 35.0
+        movement = 0.0
+        
+    return BiometricEpochTelemetry(
+        subject_id=subject_id,
+        timestamp=timestamp,
+        total_sleep_hours=total_sleep,
+        hrv_rmssd_ms=hrv,
+        resting_heart_rate_bpm=rhr,
+        movement_index=movement,
+        phases=SleepPhaseDuration(
+            rem_minutes=180.0,
+            deep_minutes=200.0,
+            light_minutes=160.0,
+            wake_minutes=0.0
+        ),
+        is_adversarial_spoof=True,
+        authenticity_label=0
+    )
