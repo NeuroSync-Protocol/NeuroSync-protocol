@@ -86,3 +86,14 @@ def run_evaluation(n_samples: int = 150) -> Dict[str, Any]:
     metrics = compute_classification_metrics(y_true, y_pred)
     report = generate_benchmark_markdown_report(metrics, len(dataset))
     return {"metrics": metrics, "report": report}
+
+def evaluate_batch_numpy_vectorized(features_matrix: np.ndarray) -> np.ndarray:
+    """Evaluates telemetry feature matrix using optimized vectorized numpy array operations."""
+    # features: [total_sleep, hrv_rmssd, resting_hr, movement_idx, rem, deep]
+    hrv = features_matrix[:, 1]
+    sleep = features_matrix[:, 0]
+    movement = features_matrix[:, 3]
+    
+    # Vectorized anomaly mask
+    is_anomaly = (hrv > 190.0) | (sleep > 16.0) | (movement < 0.02)
+    return np.where(is_anomaly, 0, 1)
