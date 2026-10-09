@@ -1,5 +1,23 @@
 #![no_std]
-use soroban_sdk::{contract, contractclient, contractimpl, contracttype, Address, Env};
+use soroban_sdk::{contract, contractclient, contractimpl, contracttype, symbol_short, Address, Env};
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EpochRewardClaimedEvent {
+    pub user: Address,
+    pub day_epoch: u64,
+    pub amount: i128,
+    pub streak: u32,
+    pub multiplier_bps: u32,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MultiplierStreakEvent {
+    pub user: Address,
+    pub count: u32,
+    pub timestamp: u64,
+}
 
 #[contractclient(name = "TokenClient")]
 pub trait TokenInterface {
@@ -27,6 +45,7 @@ pub enum DataKey {
     TokenAddress,
     ClaimRecord(Address, u64),
     UserStreak(Address),
+    Paused,
 }
 
 #[contract]
@@ -42,6 +61,7 @@ impl RewardDistributor {
         }
         env.storage().instance().set(&admin_key, &admin);
         env.storage().instance().set(&DataKey::TokenAddress, &token_address);
+        env.storage().instance().set(&DataKey::Paused, &false);
         env.storage().instance().extend_ttl(172_800, 518_400);
     }
 
@@ -51,9 +71,54 @@ impl RewardDistributor {
         env.storage().instance().get(&DataKey::TokenAddress).unwrap_or_else(|| panic!("Token address not set"))
     }
 
+    /// Check if the contract is paused
+    pub fn is_paused(env: Env) -> bool {
+        env.storage().instance().extend_ttl(172_800, 518_400);
+        env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+    }
+
+    /// Emergency pause circuit breaker - requires admin authentication
+    pub fn pause(env: Env, admin: Address) {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .unwrap_or_else(|| panic!("Admin not set"));
+        if admin != stored_admin {
+            panic!("Unauthorized: only admin can pause");
+        }
+        admin.require_auth();
+
+        env.storage().instance().set(&DataKey::Paused, &true);
+        env.storage().instance().extend_ttl(172_800, 518_400);
+
+        env.events().publish((symbol_short!("circuit"), symbol_short!("pause")), admin);
+    }
+
+    /// Resume operations after emergency pause - requires admin authentication
+    pub fn unpause(env: Env, admin: Address) {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .unwrap_or_else(|| panic!("Admin not set"));
+        if admin != stored_admin {
+            panic!("Unauthorized: only admin can unpause");
+        }
+        admin.require_auth();
+
+        env.storage().instance().set(&DataKey::Paused, &false);
+        env.storage().instance().extend_ttl(172_800, 518_400);
+
+        env.events().publish((symbol_short!("circuit"), symbol_short!("unpause")), admin);
+    }
+
     /// Record or update a user's sleep streak length and timestamp.
     /// Can be invoked by Admin (requires auth) or Core Contract (cross-contract).
     pub fn set_streak(env: Env, caller: Address, user: Address, count: u32, timestamp: u64) {
+        if Self::is_paused(env.clone()) {
+            panic!("Contract is paused");
+        }
         let admin: Option<Address> = env.storage().instance().get(&DataKey::Admin);
         if let Some(admin_addr) = admin {
             if caller == admin_addr {
@@ -61,9 +126,19 @@ impl RewardDistributor {
             }
         }
         let ts = if timestamp == 0 { env.ledger().timestamp() } else { timestamp };
-        let streak_key = DataKey::UserStreak(user);
+        let streak_key = DataKey::UserStreak(user.clone());
         env.storage().persistent().set(&streak_key, &StreakData { count, last_timestamp: ts });
         env.storage().persistent().extend_ttl(&streak_key, 172_800, 518_400);
+
+        // Emit streak update event
+        env.events().publish(
+            (symbol_short!("streak"), symbol_short!("mult"), user.clone()),
+            MultiplierStreakEvent {
+                user,
+                count,
+                timestamp: ts,
+            },
+        );
     }
 
     /// Retrieve active streak for a user.
@@ -111,6 +186,9 @@ impl RewardDistributor {
 
     /// Claim daily reward: requires both has_claimed_today == false and active streak > 0
     pub fn claim_reward(env: Env, user: Address) {
+        if Self::is_paused(env.clone()) {
+            panic!("Contract is paused");
+        }
         user.require_auth();
 
         // 1. Verify has_claimed_today(user) is FALSE
@@ -150,9 +228,22 @@ impl RewardDistributor {
 
         // 6. Mark has_claimed_today(user) = TRUE for current DayEpoch and extend TTL
         let day_epoch = env.ledger().timestamp() / 86_400;
-        let claim_key = DataKey::ClaimRecord(user, day_epoch);
+        let claim_key = DataKey::ClaimRecord(user.clone(), day_epoch);
         env.storage().persistent().set(&claim_key, &true);
         env.storage().persistent().extend_ttl(&claim_key, 172_800, 518_400);
+
+        // 7. Emit epoch claim event with multiplier status
+        let multiplier_bps = 1000 + (streak * 100);
+        env.events().publish(
+            (symbol_short!("epoch"), symbol_short!("claim"), user.clone()),
+            EpochRewardClaimedEvent {
+                user,
+                day_epoch,
+                amount: pending_amount,
+                streak,
+                multiplier_bps,
+            },
+        );
     }
 
     /// Return overall user state for UI consumption
@@ -170,3 +261,6 @@ impl RewardDistributor {
         }
     }
 }
+
+#[cfg(test)]
+mod test;
