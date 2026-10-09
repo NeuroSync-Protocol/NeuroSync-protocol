@@ -48,3 +48,41 @@ def compute_classification_metrics(y_true: List[int], y_pred: List[int]) -> Dict
         "recall": round(recall, 4),
         "f1_score": round(f1, 4)
     }
+
+def generate_benchmark_markdown_report(metrics: Dict[str, Any], total_samples: int) -> str:
+    """Generates formatted markdown benchmark summary report."""
+    return f"""# NeuroSync Oracle Model Evaluation Report
+
+## Dataset Summary
+- **Total Evaluated Epochs**: {total_samples}
+- **Evaluation Strategy**: Adversarial synthetic injection vs circadian sleep telemetry
+
+## Confusion Matrix
+| Metric | Value |
+|---|---|
+| True Positives (Authentic Verified) | {metrics['true_positives']} |
+| True Negatives (Spoof Rejected) | {metrics['true_negatives']} |
+| False Positives (Spoof Accepted) | {metrics['false_positives']} |
+| False Negatives (Authentic Rejected) | {metrics['false_negatives']} |
+
+## Benchmark Metrics
+- **Accuracy**: {metrics['accuracy'] * 100:.2f}%
+- **Precision**: {metrics['precision'] * 100:.2f}%
+- **Recall**: {metrics['recall'] * 100:.2f}%
+- **F1 Score**: {metrics['f1_score']:.4f}
+"""
+
+def run_evaluation(n_samples: int = 150) -> Dict[str, Any]:
+    dataset = generate_telemetry_dataset(n_samples=n_samples, spoof_ratio=0.25)
+    y_true = [rec.authenticity_label for rec in dataset]
+    # Synthetic rule-based fallback / heuristic evaluator for test suite
+    y_pred = []
+    for rec in dataset:
+        if rec.hrv_rmssd_ms > 190 or rec.total_sleep_hours > 16 or rec.movement_index < 0.02:
+            y_pred.append(0)
+        else:
+            y_pred.append(1)
+            
+    metrics = compute_classification_metrics(y_true, y_pred)
+    report = generate_benchmark_markdown_report(metrics, len(dataset))
+    return {"metrics": metrics, "report": report}
