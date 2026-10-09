@@ -16,3 +16,10 @@ def test_normal_profile_distribution():
     assert 40.0 <= record.hrv_rmssd_ms <= 95.0
     assert record.is_adversarial_spoof is False
     assert record.authenticity_label == 1
+
+def test_adversarial_generator_anomaly_flags():
+    spoof = generate_adversarial_spoof("sub_bad", 1700000000)
+    assert spoof.is_adversarial_spoof is True
+    assert spoof.authenticity_label == 0
+    # Implausible biological signal checks
+    assert spoof.hrv_rmssd_ms > 100.0 or spoof.total_sleep_hours > 15.0 or spoof.movement_index < 0.05
