@@ -293,6 +293,15 @@ impl NeuroSyncContract {
 
         (streak.count, streak.last_timestamp, last_sub)
     }
+
+    /// Validates that a telemetry proof timestamp is within an acceptable fresh window (not expired).
+    pub fn is_timestamp_valid(env: Env, proof_timestamp: u64, max_age_seconds: u64) -> bool {
+        let current_ts = env.ledger().timestamp();
+        if proof_timestamp > current_ts {
+            return false;
+        }
+        current_ts - proof_timestamp <= max_age_seconds
+    }
 }
 
 #[cfg(test)]

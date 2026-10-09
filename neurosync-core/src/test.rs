@@ -101,3 +101,24 @@ fn test_transaction_reverts_when_paused() {
 
     client.verify_telemetry(&user, &payload, &signature);
 }
+
+#[test]
+fn test_expired_signature_timestamp_edge_cases() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(NeuroSyncContract, ());
+    let client = NeuroSyncContractClient::new(&env, &contract_id);
+
+    // Set ledger timestamp to 100,000
+    env.ledger().set_timestamp(100_000);
+
+    // Valid recent timestamp (within 3600 seconds)
+    assert_eq!(client.is_timestamp_valid(&99_000, &3600), true);
+
+    // Expired timestamp (older than 3600 seconds)
+    assert_eq!(client.is_timestamp_valid(&90_000, &3600), false);
+
+    // Future timestamp (drift error)
+    assert_eq!(client.is_timestamp_valid(&105_000, &3600), false);
+}
