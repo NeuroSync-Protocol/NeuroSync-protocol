@@ -23,3 +23,18 @@ def test_adversarial_generator_anomaly_flags():
     assert spoof.authenticity_label == 0
     # Implausible biological signal checks
     assert spoof.hrv_rmssd_ms > 100.0 or spoof.total_sleep_hours > 15.0 or spoof.movement_index < 0.05
+
+def test_sanitization_and_masking():
+    raw_id = "user_wallet_GBABC123456789"
+    masked_id = sanitize_subject_id(raw_id)
+    assert masked_id.startswith("anon_")
+    assert raw_id not in masked_id
+    assert len(masked_id) > 10
+
+def test_evaluation_pipeline_metrics():
+    result = run_evaluation(n_samples=50)
+    metrics = result["metrics"]
+    assert "f1_score" in metrics
+    assert "accuracy" in metrics
+    assert metrics["accuracy"] >= 0.8
+    assert "NeuroSync Oracle Model Evaluation Report" in result["report"]
