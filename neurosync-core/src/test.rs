@@ -43,3 +43,20 @@ fn test_telemetry_event_emission() {
     // At initialization or status queries events can be checked
     assert_eq!(client.is_paused(), false);
 }
+
+#[test]
+fn test_reward_claim_event_payload() {
+    let env = Env::default();
+    let user = Address::generate(&env);
+    let event = EpochRewardClaimedEvent {
+        user: user.clone(),
+        day_epoch: 42,
+        amount: 100_000_000,
+        streak: 5,
+        multiplier_bps: 1500,
+    };
+    assert_eq!(event.user, user);
+    assert_eq!(event.amount, 100_000_000);
+    assert_eq!(event.streak, 5);
+    assert_eq!(event.multiplier_bps, 1500);
+}

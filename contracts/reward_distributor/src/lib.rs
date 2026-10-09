@@ -211,3 +211,6 @@ impl RewardDistributor {
         }
     }
 }
+
+#[cfg(test)]
+mod test;
