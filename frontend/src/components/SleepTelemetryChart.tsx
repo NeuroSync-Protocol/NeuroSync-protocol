@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { TelemetryEpochPoint, DateRangeFilter } from '@/types/telemetry';
-import { Calendar, BarChart3, Activity, Info } from 'lucide-react';
+import { Calendar, BarChart3, Activity, HeartPulse } from 'lucide-react';
 
 interface SleepTelemetryChartProps {
   data?: TelemetryEpochPoint[];
@@ -21,6 +21,8 @@ export const SleepTelemetryChart: React.FC<SleepTelemetryChartProps> = ({
 
   const displayData = data.slice(0, activeRange === '7D' ? 7 : activeRange === '14D' ? 14 : 30);
   const maxHours = Math.max(...displayData.map((d) => d.totalSleepHours || 9), 9);
+  const maxHrv = Math.max(...displayData.map((d) => d.hrvMs || 100), 100);
+  const minHrv = Math.min(...displayData.map((d) => d.hrvMs || 20), 20);
 
   return (
     <div className="w-full bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-2xl backdrop-blur-md">
@@ -87,18 +89,27 @@ export const SleepTelemetryChart: React.FC<SleepTelemetryChartProps> = ({
 
       {/* Legend */}
       <div className="flex items-center gap-6 mt-4 text-xs font-medium text-slate-300">
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded bg-purple-500 shadow-sm" />
-          <span>REM Sleep</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded bg-indigo-500 shadow-sm" />
-          <span>Deep Sleep</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded bg-sky-400 shadow-sm" />
-          <span>Light Sleep</span>
-        </div>
+        {selectedMetric === 'architecture' ? (
+          <>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded bg-purple-500 shadow-sm" />
+              <span>REM Sleep</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded bg-indigo-500 shadow-sm" />
+              <span>Deep Sleep</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded bg-sky-400 shadow-sm" />
+              <span>Light Sleep</span>
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full bg-emerald-400 shadow-sm" />
+            <span className="text-emerald-400 font-semibold">Heart Rate Variability (rMSSD in ms)</span>
+          </div>
+        )}
       </div>
 
       {/* Main Chart Canvas */}
@@ -113,7 +124,69 @@ export const SleepTelemetryChart: React.FC<SleepTelemetryChartProps> = ({
             <Calendar className="w-10 h-10 mb-2 opacity-50" />
             <p className="text-sm">No telemetry records found for current epoch range.</p>
           </div>
+        ) : selectedMetric === 'hrv' ? (
+          /* HRV Time-Series Line Graph SVG Overlay */
+          <div className="w-full h-full flex flex-col justify-end pt-4 pb-2">
+            <svg className="w-full h-48 overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="hrvGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#34d399" stopOpacity="0.4" />
+                  <stop offset="100%" stopColor="#34d399" stopOpacity="0.0" />
+                </linearGradient>
+              </defs>
+
+              {/* Area under curve */}
+              {displayData.length > 1 && (
+                <polygon
+                  fill="url(#hrvGradient)"
+                  points={`0,100 ${displayData
+                    .map((item, index) => {
+                      const x = (index / (displayData.length - 1)) * 100;
+                      const y = 100 - ((item.hrvMs - minHrv) / (maxHrv - minHrv || 1)) * 80;
+                      return `${x},${y}`;
+                    })
+                    .join(' ')} 100,100`}
+                />
+              )}
+
+              {/* HRV Path Line */}
+              {displayData.length > 1 && (
+                <polyline
+                  fill="none"
+                  stroke="#34d399"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  points={displayData
+                    .map((item, index) => {
+                      const x = (index / (displayData.length - 1)) * 100;
+                      const y = 100 - ((item.hrvMs - minHrv) / (maxHrv - minHrv || 1)) * 80;
+                      return `${x},${y}`;
+                    })
+                    .join(' ')}
+                />
+              )}
+            </svg>
+
+            {/* X-axis indicators */}
+            <div className="w-full flex justify-between items-center mt-3 px-1">
+              {displayData.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex flex-col items-center cursor-pointer group"
+                  onMouseEnter={() => setHoveredPoint(item)}
+                  onMouseLeave={() => setHoveredPoint(null)}
+                >
+                  <span className="text-xs font-semibold text-emerald-400 group-hover:scale-110 transition-transform">
+                    {Math.round(item.hrvMs)}ms
+                  </span>
+                  <span className="text-[11px] text-slate-500 mt-1">{item.date}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         ) : (
+          /* Multi-stage sleep bars */
           <div className="w-full h-full flex items-end justify-between gap-3 pt-6 pb-2">
             {displayData.map((item) => {
               const remHeight = (item.remHours / maxHours) * 100;
@@ -128,26 +201,21 @@ export const SleepTelemetryChart: React.FC<SleepTelemetryChartProps> = ({
                   onMouseEnter={() => setHoveredPoint(item)}
                   onMouseLeave={() => setHoveredPoint(null)}
                 >
-                  {/* Stacked bar container */}
                   <div className="w-full max-w-[48px] bg-slate-800/60 rounded-t-lg overflow-hidden flex flex-col-reverse justify-start transition-transform group-hover:scale-105 duration-200">
-                    {/* Deep sleep (bottom) */}
                     <div
                       style={{ height: `${deepHeight}%` }}
                       className="w-full bg-indigo-500 hover:bg-indigo-400 transition-colors"
                     />
-                    {/* Light sleep (middle) */}
                     <div
                       style={{ height: `${lightHeight}%` }}
                       className="w-full bg-sky-400 hover:bg-sky-300 transition-colors"
                     />
-                    {/* REM sleep (top) */}
                     <div
                       style={{ height: `${remHeight}%` }}
                       className="w-full bg-purple-500 hover:bg-purple-400 transition-colors"
                     />
                   </div>
 
-                  {/* Day label */}
                   <span className="text-xs font-medium text-slate-400 mt-2 truncate w-full text-center">
                     {item.date}
                   </span>
@@ -165,6 +233,12 @@ export const SleepTelemetryChart: React.FC<SleepTelemetryChartProps> = ({
               <span className="text-slate-400">(Epoch {hoveredPoint.epochDay})</span>
             </p>
             <div className="space-y-1 text-slate-300">
+              <div className="flex justify-between gap-4">
+                <span className="text-emerald-400 flex items-center gap-1">
+                  <HeartPulse className="w-3 h-3" /> HRV rMSSD:
+                </span>
+                <span className="font-semibold text-emerald-300">{hoveredPoint.hrvMs.toFixed(1)} ms</span>
+              </div>
               <div className="flex justify-between gap-4">
                 <span className="text-purple-400">REM Sleep:</span>
                 <span className="font-semibold">{hoveredPoint.remHours.toFixed(1)} hrs</span>
