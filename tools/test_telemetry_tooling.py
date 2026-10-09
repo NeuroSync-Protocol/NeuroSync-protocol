@@ -38,3 +38,10 @@ def test_evaluation_pipeline_metrics():
     assert "accuracy" in metrics
     assert metrics["accuracy"] >= 0.8
     assert "NeuroSync Oracle Model Evaluation Report" in result["report"]
+
+def test_oracle_scoring_under_spoofed_payload():
+    dataset = generate_telemetry_dataset(n_samples=20, spoof_ratio=0.5)
+    spoofs = [d for d in dataset if d.is_adversarial_spoof]
+    assert len(spoofs) > 0
+    for s in spoofs:
+        assert s.authenticity_label == 0
