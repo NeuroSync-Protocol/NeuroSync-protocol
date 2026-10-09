@@ -384,3 +384,23 @@ async def submit_proof(data: ProofPayloadRequest):
             status_code=500,
             detail=f"Relayer submission error: {str(e)}"
         )
+
+@app.get("/health", tags=["Monitoring"])
+def health_check():
+    """Returns protocol health and operational status."""
+    return {
+        "status": "healthy",
+        "service": "NeuroSync-Oracle-API",
+        "version": "1.2.0",
+        "oracle_public_key": ORACLE_PUBLIC_KEY_HEX
+    }
+
+@app.get("/model/version", tags=["Monitoring"])
+def model_version():
+    """Returns the loaded ML scoring model metadata."""
+    return {
+        "model_name": "sleep_authenticity_classifier",
+        "version": "v1.2-randomforest",
+        "framework": "scikit-learn",
+        "features": ["total_sleep", "hrv_rmssd", "resting_hr", "movement_idx", "rem", "deep"]
+    }
