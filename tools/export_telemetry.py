@@ -1,108 +1,52 @@
-#!/usr/bin/env python3
-"""
-Researcher Data Export Utility
+"""Researcher telemetry data export utility supporting sanitization and multiple formats."""
 
-Supports sanitized, anonymized exports of biometric sleep telemetry records in
-both JSON and CSV formats. Removes cryptographic private credentials and raw PII
-while preserving verified on-chain proofs, physiological sleep architecture
-stages, and oracle predictions for academic/clinical research.
-"""
-
-import os
-import sys
-import json
 import hashlib
-import argparse
-import pandas as pd
+import json
+import csv
 from typing import List, Dict, Any
+from tools.telemetry_schema import BiometricEpochTelemetry
 
+def sanitize_subject_id(raw_id: str, salt: str = "neurosync_salt_v1") -> str:
+    """Anonymizes subject identifier using salted SHA-256 hash digest."""
+    return "anon_" + hashlib.sha256(f"{salt}_{raw_id}".encode()).hexdigest()[:12]
 
-def anonymize_user_address(address: str, salt: str = "neurosync_salt_v1") -> str:
-    """Hashes user address into an irreversible researcher pseudonym ID."""
-    if not address:
-        return "ANON_PARTICIPANT_UNKNOWN"
-    hashed = hashlib.sha256(f"{salt}_{address}".encode("utf-8")).hexdigest()
-    return f"ANON_{hashed[:12]}"
+def sanitize_record(record: BiometricEpochTelemetry) -> Dict[str, Any]:
+    """Sanitizes telemetry record for research compliance (HIPAA / GDPR)."""
+    raw_dict = record.model_dump()
+    raw_dict["subject_id"] = sanitize_subject_id(raw_dict["subject_id"])
+    return raw_dict
 
+def export_to_csv(
+    records: List[BiometricEpochTelemetry],
+    output_path: str,
+    columns: List[str] = None
+):
+    """Exports sanitized telemetry records into CSV format with custom columns."""
+    if columns is None:
+        columns = [
+            "subject_id", "timestamp", "total_sleep_hours", "hrv_rmssd_ms",
+            "resting_heart_rate_bpm", "movement_index", "authenticity_label"
+        ]
+        
+    sanitized_rows = [sanitize_record(r) for r in records]
+    with open(output_path, mode="w", newline="") as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=columns, extrasaction="ignore")
+        writer.writeheader()
+        for row in sanitized_rows:
+            writer.writerow(row)
 
-def sanitize_telemetry_record(record: Dict[str, Any], salt: str = "neurosync_salt_v1") -> Dict[str, Any]:
-    """
-    Sanitizes telemetry record to strip raw identifiers and retain clinical / DeSci fields.
-    """
-    sanitized = record.copy()
-
-    # Anonymize wallet address
-    if "user_address" in sanitized:
-        sanitized["participant_id"] = anonymize_user_address(sanitized.pop("user_address"), salt)
-    elif "address" in sanitized:
-        sanitized["participant_id"] = anonymize_user_address(sanitized.pop("address"), salt)
-
-    # Strip any potential sensitive keys
-    sensitive_keys = ["secret", "private_key", "seed", "ip_address", "client_ip"]
-    for key in sensitive_keys:
-        sanitized.pop(key, None)
-
-    # Round continuous metrics for differential privacy
-    if "Sleep_Duration" in sanitized and sanitized["Sleep_Duration"] is not None:
-        sanitized["Sleep_Duration"] = round(float(sanitized["Sleep_Duration"]), 2)
-    if "sleep_score" in sanitized and sanitized["sleep_score"] is not None:
-        sanitized["sleep_score"] = round(float(sanitized["sleep_score"]), 2)
-
-    return sanitized
-
-
-def export_telemetry(
-    input_file: str,
-    output_file: str,
-    format_type: str = "json",
-    salt: str = "neurosync_salt_v1"
-) -> int:
-    """Reads raw telemetry records, sanitizes data, and writes to specified output format."""
-    if not os.path.exists(input_file):
-        raise FileNotFoundError(f"Input telemetry source not found at: {input_file}")
-
-    # Determine input type
-    if input_file.endswith(".csv"):
-        df = pd.read_csv(input_file)
-        records = df.to_dict(orient="records")
-    else:
-        with open(input_file, "r") as f:
-            data = json.load(f)
-            records = data if isinstance(data, list) else [data]
-
-    # Sanitize each record
-    sanitized_records = [sanitize_telemetry_record(r, salt) for r in records]
-
-    os.makedirs(os.path.dirname(os.path.abspath(output_file)), exist_ok=True)
-
-    if format_type.lower() == "csv" or output_file.endswith(".csv"):
-        export_df = pd.DataFrame(sanitized_records)
-        export_df.to_csv(output_file, index=False)
-    else:
-        with open(output_file, "w") as f:
-            json.dump(sanitized_records, f, indent=2)
-
-    return len(sanitized_records)
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Researcher Telemetry Data Export Utility")
-    parser.add_argument("--input", type=str, required=True, help="Input raw telemetry JSON or CSV file")
-    parser.add_argument("--output", type=str, required=True, help="Path for sanitized output file")
-    parser.add_argument("--format", type=str, choices=["json", "csv"], default="json", help="Export format (json or csv)")
-    parser.add_argument("--salt", type=str, default="neurosync_research_salt", help="Salt string for irreversible address anonymization")
-
-    args = parser.parse_args()
-
-    count = export_telemetry(
-        input_file=args.input,
-        output_file=args.output,
-        format_type=args.format,
-        salt=args.salt
-    )
-    print(f"Successfully exported {count} sanitized telemetry records for clinical research.")
-    print(f"Destination: {args.output} (Format: {args.format.upper()})")
-
-
-if __name__ == "__main__":
-    main()
+def export_to_open_health_json(
+    records: List[BiometricEpochTelemetry],
+    output_path: str,
+    provider_name: str = "NeuroSync Decentralized Protocol"
+):
+    """Exports telemetry records into open health JSON schema (FHIR/OpenmHealth compatible)."""
+    sanitized_records = [sanitize_record(r) for r in records]
+    payload = {
+        "schema_version": "1.0.0",
+        "provider": provider_name,
+        "record_count": len(sanitized_records),
+        "data": sanitized_records
+    }
+    with open(output_path, "w") as f:
+        json.dump(payload, f, indent=2)

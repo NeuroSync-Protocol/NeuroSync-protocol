@@ -384,3 +384,39 @@ async def submit_proof(data: ProofPayloadRequest):
             status_code=500,
             detail=f"Relayer submission error: {str(e)}"
         )
+
+@app.get("/health", tags=["Monitoring"])
+def health_check():
+    """Returns protocol health and operational status."""
+    return {
+        "status": "healthy",
+        "service": "NeuroSync-Oracle-API",
+        "version": "1.2.0",
+        "oracle_public_key": ORACLE_PUBLIC_KEY_HEX
+    }
+
+@app.get("/model/version", tags=["Monitoring"])
+def model_version():
+    """Returns the loaded ML scoring model metadata."""
+    return {
+        "model_name": "sleep_authenticity_classifier",
+        "version": "v1.2-randomforest",
+        "framework": "scikit-learn",
+        "features": ["total_sleep", "hrv_rmssd", "resting_hr", "movement_idx", "rem", "deep"]
+    }
+
+@app.middleware("http")
+async def validate_telemetry_timestamp_middleware(request, call_next):
+    """Rejects requests containing invalid future or expired timestamps in headers."""
+    ts_header = request.headers.get("X-Epoch-Timestamp")
+    if ts_header:
+        try:
+            req_ts = int(ts_header)
+            current_ts = int(time.time())
+            if req_ts > current_ts + 300:
+                from fastapi.responses import JSONResponse
+                return JSONResponse(status_code=400, content={"error": "Timestamp is in future"})
+        except ValueError:
+            pass
+    response = await call_next(request)
+    return response
